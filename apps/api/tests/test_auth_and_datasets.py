@@ -1,0 +1,115 @@
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from noomin_api.db.base import Base
+from noomin_api.db.session import get_db
+from noomin_api.main import app
+
+
+@pytest.fixture
+def client():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    TestingSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    Base.metadata.create_all(engine)
+
+    def override_get_db():
+        db = TestingSession()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+    Base.metadata.drop_all(engine)
+    engine.dispose()
+
+
+def create_account(client: TestClient, email: str = "camille@example.com") -> dict:
+    response = client.post("/api/v1/auth/register", json={
+        "email": email,
+        "full_name": "Camille Martin",
+        "organization_name": "Acme Studio",
+        "password": "correct-horse-2026!",
+    })
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_registration_creates_owner_session_and_rejects_duplicate(client: TestClient) -> None:
+    session = create_account(client)
+    assert session["user"]["email"] == "camille@example.com"
+    assert session["organizations"][0]["role"] == "owner"
+    assert "session" in client.cookies
+    assert client.get("/api/v1/auth/session").status_code == 200
+    duplicate = client.post("/api/v1/auth/register", json={
+        "email": "CAMILLE@example.com",
+        "full_name": "Camille Martin",
+        "organization_name": "Other Studio",
+        "password": "correct-horse-2026!",
+    })
+    assert duplicate.status_code == 409
+
+
+def test_login_sets_session_and_logout_clears_it(client: TestClient) -> None:
+    create_account(client)
+    client.post("/api/v1/auth/logout")
+    response = client.post("/api/v1/auth/login", json={"email": "camille@example.com", "password": "correct-horse-2026!"})
+    assert response.status_code == 200
+    assert client.get("/api/v1/auth/session").status_code == 200
+    client.post("/api/v1/auth/logout")
+    assert client.get("/api/v1/auth/session").status_code == 401
+
+
+def test_csv_import_persists_rows_and_scopes_them_to_organization(client: TestClient) -> None:
+    session = create_account(client)
+    organization_id = session["organizations"][0]["id"]
+    response = client.post(
+        "/api/v1/datasets",
+        headers={"X-Organization-ID": organization_id},
+        files={"file": ("revenus.csv", "jour,montant\n2026-01-01,12.5\n2026-01-02,15.0\n", "text/csv")},
+    )
+    assert response.status_code == 201, response.text
+    dataset = response.json()
+    assert dataset["row_count"] == 2
+    assert dataset["column_count"] == 2
+    assert client.get("/api/v1/datasets", headers={"X-Organization-ID": organization_id}).json()[0]["id"] == dataset["id"]
+    detail = client.get(f"/api/v1/datasets/{dataset['id']}", headers={"X-Organization-ID": organization_id})
+    assert detail.json()["preview"][1] == {"jour": "2026-01-02", "montant": "15.0"}
+    profile = client.get(f"/api/v1/datasets/{dataset['id']}/profile", headers={"X-Organization-ID": organization_id})
+    amount = next(column for column in profile.json()["columns"] if column["name"] == "montant")
+    assert amount["data_type"] == "number"
+    assert amount["minimum"] == 12.5 and amount["maximum"] == 15.0
+    assert sum(item["count"] for item in amount["distribution"]) == 2
+
+
+def test_csv_import_rejects_duplicate_columns(client: TestClient) -> None:
+    session = create_account(client)
+    response = client.post(
+        "/api/v1/datasets",
+        headers={"X-Organization-ID": session["organizations"][0]["id"]},
+        files={"file": ("invalid.csv", "amount,amount\n1,2\n", "text/csv")},
+    )
+    assert response.status_code == 400
+    assert "uniques" in response.json()["detail"]
+
+
+def test_dataset_is_not_visible_to_another_organization(client: TestClient) -> None:
+    first = create_account(client)
+    first_org = first["organizations"][0]["id"]
+    uploaded = client.post(
+        "/api/v1/datasets",
+        headers={"X-Organization-ID": first_org},
+        files={"file": ("private.csv", "value\nsecret\n", "text/csv")},
+    )
+    assert uploaded.status_code == 201
+    other_client = TestClient(app)
+    second = create_account(other_client, "alex@example.com")
+    response = other_client.get("/api/v1/datasets", headers={"X-Organization-ID": first_org})
+    assert response.status_code == 403
+    assert second["organizations"][0]["id"] != first_org
