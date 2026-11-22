@@ -65,3 +65,20 @@ cd ../.. && npm run build && npm run lint
 Les mots de passe sont hachés avec Argon2id et le cookie est HTTP-only, `SameSite=Lax`, avec l’attribut `Secure` hors développement. Remplacez tous les identifiants de développement et utilisez une clé JWT aléatoire avant tout déploiement.
 
 Ce MVP n’inclut pas encore la vérification d’adresse e-mail, la limitation de tentatives de connexion, l’invalidation serveur de sessions déjà émises, la gestion des invitations, les sauvegardes, les journaux d’audit ni une revue de sécurité de production. Le health check est un contrôle de disponibilité applicative ; il ne valide pas PostgreSQL ou Redis.
+
+### Aperçu local sans Docker
+
+Pour essayer l’interface et le parcours CSV sans installer PostgreSQL, un aperçu local peut utiliser SQLite. Ce mode est réservé au développement et n’applique pas les migrations PostgreSQL :
+
+```bash
+cd apps/api
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -e '.[dev]'
+export DATABASE_URL=sqlite:///../../work/noomin-preview.sqlite
+export JWT_SECRET_KEY=local-noomin-preview-secret-key-32-chars
+python -c 'from noomin_api.db.session import engine; from noomin_api.db.base import Base; import noomin_api.models; Base.metadata.create_all(engine)'
+uvicorn noomin_api.main:app --reload
+```
+
+Dans un second terminal, à la racine du dépôt : `npm install && npm run dev`. Les inscriptions et imports de ce mode sont conservés dans `work/noomin-preview.sqlite` sur cette machine.
