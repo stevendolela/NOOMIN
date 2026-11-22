@@ -23,6 +23,7 @@ def client():
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    app.state.test_session_factory = TestingSession
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -113,3 +114,46 @@ def test_dataset_is_not_visible_to_another_organization(client: TestClient) -> N
     response = other_client.get("/api/v1/datasets", headers={"X-Organization-ID": first_org})
     assert response.status_code == 403
     assert second["organizations"][0]["id"] != first_org
+
+
+def test_celery_pipeline_filters_and_creates_a_new_dataset(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from noomin_api.api import pipelines as pipeline_api
+    from noomin_api.tasks import execute_pipeline_job
+
+    session = create_account(client)
+    organization_id = session["organizations"][0]["id"]
+    source_response = client.post(
+        "/api/v1/datasets",
+        headers={"X-Organization-ID": organization_id},
+        files={"file": ("sales.csv", "date,revenue\n2026-01-01,10\n2026-01-02,25\n2026-01-03,50\n", "text/csv")},
+    )
+    assert source_response.status_code == 201
+    source_id = source_response.json()["id"]
+    invalid = client.post("/api/v1/pipelines", headers={"X-Organization-ID": organization_id}, json={
+        "name": "Filtre invalide",
+        "source_dataset_id": source_id,
+        "steps": [{"op": "filter_rows", "column": "revenue", "operator": "greater_than", "value": "NaN"}],
+    })
+    assert invalid.status_code == 422
+    created = client.post("/api/v1/pipelines", headers={"X-Organization-ID": organization_id}, json={
+        "name": "Ventes importantes",
+        "source_dataset_id": source_id,
+        "steps": [
+            {"op": "filter_rows", "column": "revenue", "operator": "greater_than", "value": "20"},
+            {"op": "select_columns", "columns": ["date", "revenue"]},
+            {"op": "rename_columns", "mapping": {"revenue": "revenue_selected"}},
+        ],
+    })
+    assert created.status_code == 201, created.text
+    pipeline_id = created.json()["id"]
+    monkeypatch.setattr(pipeline_api.execute_pipeline, "apply_async", lambda *_args, **_kwargs: None)
+    queued = client.post(f"/api/v1/pipelines/{pipeline_id}/runs", headers={"X-Organization-ID": organization_id})
+    assert queued.status_code == 202, queued.text
+    execute_pipeline_job(queued.json()["id"], session_factory=client.app.state.test_session_factory)
+    completed = client.get(f"/api/v1/pipelines/{pipeline_id}", headers={"X-Organization-ID": organization_id}).json()["last_run"]
+    assert completed["status"] == "succeeded"
+    output = client.get(f"/api/v1/datasets/{completed['output_dataset_id']}", headers={"X-Organization-ID": organization_id})
+    assert output.status_code == 200
+    assert output.json()["row_count"] == 2
+    assert output.json()["columns"] == ["date", "revenue_selected"]
+    assert output.json()["preview"][0] == {"date": "2026-01-02", "revenue_selected": "25"}

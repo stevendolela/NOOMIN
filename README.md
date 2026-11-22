@@ -8,9 +8,10 @@ NOOMIN est le nom de travail du produit. La disponibilité de la marque et du do
 - Accès aux données limité aux organisations auxquelles le compte appartient. Le rôle `viewer` peut consulter sans importer.
 - Import d’un CSV UTF-8 (10 Mo maximum, 20 000 lignes et 200 colonnes maximum), stockage des valeurs dans PostgreSQL et aperçu paginé des 100 premières lignes.
 - Profil descriptif calculé sur les valeurs importées : type de colonne, valeurs présentes/distinctes et distribution des colonnes numériques.
+- Pipelines réels de sélection/renommage de colonnes et filtrage, exécutés en arrière-plan par Celery ; leurs résultats sont enregistrés comme nouveaux jeux de données.
 - Interface React/TypeScript responsive, Vite, Tailwind et composants selon les conventions shadcn/ui.
 
-Pipelines planifiés, connecteurs externes, graphiques enregistrés, invitations, IA, facturation et vérification d’e-mail ne sont pas encore implémentés. L’interface les identifie comme indisponibles. Aucun service de données ou modèle IA externe n’est présenté comme connecté.
+Planification récurrente, connecteurs externes, tableaux de bord enregistrés, invitations, IA, facturation et vérification d’e-mail ne sont pas encore implémentés. L’interface les identifie comme indisponibles. Aucun service de données ou modèle IA externe n’est présenté comme connecté.
 
 ## Démarrage complet
 
@@ -77,8 +78,9 @@ source .venv/bin/activate
 pip install -e '.[dev]'
 export DATABASE_URL=sqlite:///../../work/noomin-preview.sqlite
 export JWT_SECRET_KEY=local-noomin-preview-secret-key-32-chars
+export CELERY_TASK_ALWAYS_EAGER=true
 python -c 'from noomin_api.db.session import engine; from noomin_api.db.base import Base; import noomin_api.models; Base.metadata.create_all(engine)'
 uvicorn noomin_api.main:app --reload
 ```
 
-Dans un second terminal, à la racine du dépôt : `npm install && npm run dev`. Les inscriptions et imports de ce mode sont conservés dans `work/noomin-preview.sqlite` sur cette machine.
+Dans un second terminal, à la racine du dépôt : `npm install && npm run dev`. Les inscriptions, imports et résultats de pipeline de ce mode sont conservés dans `work/noomin-preview.sqlite` sur cette machine. Les tâches Celery s’exécutent localement en mode eager, sans Redis ; Compose utilise Redis et le worker pour les traitements asynchrones.

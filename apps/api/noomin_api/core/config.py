@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     database_url: str = "postgresql+psycopg://noomin:noomin@localhost:5432/noomin"
     redis_url: str = "redis://localhost:6379/0"
+    celery_task_always_eager: bool = False
     cors_origins: str = "http://localhost:5173"
     jwt_secret_key: str = Field(default="development-only-change-me-use-at-least-32-characters", min_length=32)
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")

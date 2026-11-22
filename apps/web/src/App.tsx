@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Activity, ArrowLeft, ArrowUpRight, Bell, Check, ChevronDown, CircleHelp, Database, FileSpreadsheet, LayoutDashboard, LoaderCircle, LogOut, Plus, Settings2, Sparkles, Table2, Upload, Workflow } from 'lucide-react';
 import AuthScreen from './components/AuthScreen';
+import PipelineManager from './components/PipelineManager';
 import { Button } from './components/ui/button';
 import { api } from './lib/api';
 import type { ColumnProfile, Dataset, DatasetDetail, DatasetProfile, Session } from './lib/types';
@@ -109,7 +110,7 @@ export default function App() {
       <nav aria-label="Navigation principale">
         <NavItem label="Vue d’ensemble" active={view === 'overview'} onClick={() => setView('overview')} icon={<LayoutDashboard size={18}/>}/>
         <NavItem label="Jeux de données" active={view === 'datasets' || view === 'detail'} onClick={() => setView('datasets')} icon={<Database size={18}/>}/>
-        <NavItem label="Pipelines" active={view === 'pipelines'} onClick={() => setView('pipelines')} icon={<Workflow size={18}/>} soon/>
+        <NavItem label="Pipelines" active={view === 'pipelines'} onClick={() => setView('pipelines')} icon={<Workflow size={18}/>}/>
         <NavItem label="Analyses" active={view === 'analytics'} onClick={() => setView('analytics')} icon={<Activity size={18}/>} soon/>
       </nav>
       <div className="side-label connections-label">ORGANISATION</div>
@@ -129,7 +130,8 @@ export default function App() {
         </>}
         {view === 'datasets' && <><PageHeading eyebrow="VOS DONNÉES" title="Jeux de données" description="Importez un fichier CSV, puis consultez les lignes conservées dans votre espace." action={canUpload ? <Button size="sm" className="primary-button" disabled={uploading} onClick={() => fileInput.current?.click()}>{uploading ? <LoaderCircle className="spin" size={17}/> : <Upload size={16}/>} Importer un CSV</Button> : undefined}/>{loadingData ? <LoadingPanel/> : datasets.length ? <DatasetTable datasets={datasets} onOpen={openDataset}/> : <EmptyDatasets canUpload={canUpload} onUpload={() => fileInput.current?.click()}/>}</>}
         {view === 'detail' && <>{datasetDetail ? <><button className="back-link" onClick={() => setView('datasets')}><ArrowLeft size={15}/> Retour aux jeux de données</button><PageHeading eyebrow="JEU DE DONNÉES CSV" title={datasetDetail.name} description={`${datasetDetail.original_filename} · Importé le ${formatDate(datasetDetail.created_at)}`} action={<span className="source-badge"><Check size={14}/> Import terminé</span>}/><div className="detail-metrics"><Metric icon={<Table2 size={17}/>} label="Lignes" value={datasetDetail.row_count.toLocaleString('fr-FR')} note="Lignes conservées"/><Metric icon={<Database size={17}/>} label="Colonnes" value={datasetDetail.column_count.toLocaleString('fr-FR')} note={datasetDetail.columns.join(' · ')}/><Metric icon={<FileSpreadsheet size={17}/>} label="Taille du fichier" value={formatBytes(datasetDetail.byte_size)} note="Fichier CSV d’origine"/></div><div className="preview-heading"><div><h2>Aperçu des données</h2><p>Les {datasetDetail.preview.length.toLocaleString('fr-FR')} premières lignes de ce fichier.</p></div></div><DataPreview dataset={datasetDetail}/><ProfilePanel profile={datasetProfile} loading={loadingData}/></> : <LoadingPanel/>}</>}
-        {(view === 'pipelines' || view === 'analytics' || view === 'settings') && <ComingSoon view={view}/>}
+        {view === 'pipelines' && organizationId && <PipelineManager organizationId={organizationId} datasets={datasets} canEdit={canUpload} onOutput={async () => { setDatasets(await api<Dataset[]>('/datasets', {}, organizationId)); }} onNotice={(text, kind) => setNotice({ text, kind })}/>}
+        {(view === 'analytics' || view === 'settings') && <ComingSoon view={view}/>}
         <footer className="app-footer"><span>© 2026 NOOMIN</span><span className="footer-status">{datasets.length ? `${datasets.length.toLocaleString('fr-FR')} jeu${datasets.length > 1 ? 'x' : ''} de données importé${datasets.length > 1 ? 's' : ''}` : 'Aucune source connectée'} <span className="footer-divider">·</span> Environnement de démarrage</span><button onClick={() => setNotice({ text: 'Le centre d’aide sera ajouté prochainement.', kind: 'success' })}><CircleHelp size={14}/> Centre d’aide</button></footer>
       </div>
     </main>
@@ -156,9 +158,9 @@ function EmptyDatasets({ canUpload, onUpload }: { canUpload: boolean; onUpload: 
   return <div className="empty-datasets"><div className="empty-icon"><FileSpreadsheet size={21}/></div><h3>Aucun jeu de données pour le moment</h3><p>{canUpload ? 'Importez un fichier CSV pour commencer à explorer vos données.' : 'Un membre avec les droits de modification peut importer le premier fichier.'}</p>{canUpload && <Button size="sm" className="primary-button" onClick={onUpload}><Upload size={15}/> Choisir un fichier CSV</Button>}<small>CSV · UTF-8 · jusqu’à 10 Mo et 20 000 lignes</small></div>;
 }
 function LoadingPanel() { return <div className="loading-panel"><LoaderCircle size={19} className="spin"/> Chargement des données…</div>; }
-function ComingSoon({ view }: { view: View }) {
-  const title = view === 'pipelines' ? 'Pipelines de données' : view === 'analytics' ? 'Analyses et tableaux de bord' : 'Membres et paramètres';
-  const text = view === 'pipelines' ? 'La planification et l’exécution des transformations ne sont pas encore activées.' : view === 'analytics' ? 'Les graphiques et rapports interactifs ne sont pas encore disponibles.' : 'La gestion des membres, invitations et rôles est à construire.';
+function ComingSoon({ view }: { view: 'analytics' | 'settings' }) {
+  const title = view === 'analytics' ? 'Analyses et tableaux de bord enregistrés' : 'Membres et paramètres';
+  const text = view === 'analytics' ? 'Les rapports et visualisations enregistrés ne sont pas encore disponibles. Les profils numériques sont consultables dans chaque jeu de données.' : 'La gestion des membres, invitations et rôles est à construire.';
   return <section className="coming-panel"><div className="coming-mark"><Sparkles size={22}/></div><div className="eyebrow"><span className="eyebrow-line"/>PROCHAINE ÉTAPE</div><h1>{title}</h1><p>{text}</p><span className="coming-note">Cette section ne présente pas de données fictives.</span></section>;
 }
 
