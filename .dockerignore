@@ -1,0 +1,13 @@
+.git
+.env
+.venv
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+**/.pytest_cache
+node_modules
+**/node_modules
+dist
+**/dist
+.DS_Store

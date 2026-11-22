@@ -1,0 +1,7 @@
+{
+  "name": "noomin",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["apps/web"],
+  "scripts": {"dev": "npm run dev --workspace @noomin/web", "build": "npm run build --workspace @noomin/web", "lint": "npm run lint --workspace @noomin/web"}
+}

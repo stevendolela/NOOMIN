@@ -1,0 +1,1 @@
+"""NOOMIN API application."""
