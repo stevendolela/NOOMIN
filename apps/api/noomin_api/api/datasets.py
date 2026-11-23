@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from noomin_api.api.dependencies import get_current_organization, get_current_user
+from noomin_api.api.permissions import Permission, require_permission
 from noomin_api.db.session import get_db
 from noomin_api.models import Dataset, DatasetRow, Membership, Organization, Pipeline, PipelineRun, SavedAnalysis, User
 from noomin_api.schemas.dataset import DatasetDetail, DatasetSummary
@@ -83,8 +84,9 @@ async def upload_dataset(
         raise HTTPException(status_code=400, detail="Le fichier est vide.")
     columns, rows = _read_csv(payload)
     membership = db.scalar(select(Membership).where(Membership.user_id == user.id, Membership.organization_id == organization.id))
-    if membership is None or membership.role.value == "viewer":
-        raise HTTPException(status_code=403, detail="Votre rôle ne permet pas d’importer des données.")
+    if membership is None:
+        raise HTTPException(status_code=403, detail="Vous n’avez pas accès à cette organisation.")
+    require_permission(membership.role, Permission.EDIT_DATA, "Votre rôle ne permet pas d’importer des données.")
     clean_name = (name or filename[:-4]).strip() or "Jeu de données"
     dataset = Dataset(
         organization_id=organization.id,
@@ -134,8 +136,9 @@ def delete_dataset(
     db: Session = Depends(get_db),
 ) -> Response:
     membership = db.scalar(select(Membership).where(Membership.user_id == user.id, Membership.organization_id == organization.id))
-    if membership is None or membership.role.value == "viewer":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Votre rôle ne permet pas de supprimer des jeux de données.")
+    if membership is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Vous n’avez pas accès à cette organisation.")
+    require_permission(membership.role, Permission.EDIT_DATA, "Votre rôle ne permet pas de supprimer des jeux de données.")
     dataset = db.scalar(select(Dataset).where(Dataset.id == dataset_id, Dataset.organization_id == organization.id))
     if dataset is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Jeu de données introuvable.")

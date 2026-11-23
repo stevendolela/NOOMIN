@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from noomin_api.api.dependencies import get_current_organization, get_current_user
+from noomin_api.api.permissions import Permission, require_permission
 from noomin_api.db.session import get_db
 from noomin_api.models import Dataset, DatasetRow, Membership, Organization, SavedAnalysis, User
 from noomin_api.schemas.analysis import AnalysisCreate, AnalysisResponse
@@ -40,8 +41,9 @@ def create_analysis(
     db: Session = Depends(get_db),
 ) -> AnalysisResponse:
     membership = db.scalar(select(Membership).where(Membership.organization_id == organization.id, Membership.user_id == user.id))
-    if membership is None or membership.role.value == "viewer":
-        raise HTTPException(status_code=403, detail="Votre rôle ne permet pas d’enregistrer des analyses.")
+    if membership is None:
+        raise HTTPException(status_code=403, detail="Vous n’avez pas accès à cette organisation.")
+    require_permission(membership.role, Permission.EDIT_DATA, "Votre rôle ne permet pas d’enregistrer des analyses.")
     dataset = db.scalar(select(Dataset).where(Dataset.id == body.dataset_id, Dataset.organization_id == organization.id))
     if dataset is None:
         raise HTTPException(status_code=404, detail="Jeu de données introuvable dans cette organisation.")

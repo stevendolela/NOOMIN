@@ -118,7 +118,7 @@ export default function App() {
     <input ref={fileInput} className="visually-hidden" type="file" accept=".csv,text/csv" onChange={(event) => void uploadSelected(event.target.files?.[0])}/>
     <aside className="sidebar">
       <a className="brand" href="#home" onClick={() => setView('overview')} aria-label="NOOMIN accueil"><span className="brand-mark"><span/><span/><span/><span/></span><span>noomin</span></a>
-      <div className="workspace-switch"><span className="workspace-avatar">{organization?.name.slice(0, 1).toUpperCase() ?? 'N'}</span><span className="workspace-copy"><b>{organization?.name ?? 'Votre espace'}</b><small>{organization?.role === 'owner' ? 'Propriétaire' : organization?.role === 'admin' ? 'Administrateur' : 'Organisation'}</small></span><ChevronDown size={15}/></div>
+      <div className="workspace-switch"><span className="workspace-avatar">{organization?.name.slice(0, 1).toUpperCase() ?? 'N'}</span><span className="workspace-copy"><b>{organization?.name ?? 'Votre espace'}</b><small>{organization?.role === 'owner' ? 'Propriétaire' : organization?.role === 'admin' ? 'Administrateur' : organization?.role === 'member' ? 'Analyste' : 'Lecteur'}</small></span><ChevronDown size={15}/></div>
       <div className="side-label">ESPACE DE TRAVAIL</div>
       <nav aria-label="Navigation principale">
         <NavItem label="Vue d’ensemble" active={view === 'overview'} onClick={() => setView('overview')} icon={<LayoutDashboard size={18}/>}/>

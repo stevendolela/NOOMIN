@@ -6,8 +6,10 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from noomin_api.db.base import Base
+from noomin_api.api.permissions import Permission, has_permission
 from noomin_api.db.session import get_db
 from noomin_api.main import app
+from noomin_api.models import MembershipRole
 
 
 @pytest.fixture
@@ -41,6 +43,16 @@ def create_account(client: TestClient, email: str = "camille@example.com") -> di
     })
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def test_role_permission_matrix_matches_product_roles() -> None:
+    assert has_permission(MembershipRole.OWNER, Permission.MANAGE_WORKSPACE)
+    assert has_permission(MembershipRole.ADMIN, Permission.MANAGE_MEMBERS)
+    assert not has_permission(MembershipRole.ADMIN, Permission.MANAGE_WORKSPACE)
+    assert has_permission(MembershipRole.MEMBER, Permission.EDIT_DATA)
+    assert not has_permission(MembershipRole.MEMBER, Permission.MANAGE_MEMBERS)
+    assert has_permission(MembershipRole.VIEWER, Permission.READ_DATA)
+    assert not has_permission(MembershipRole.VIEWER, Permission.EDIT_DATA)
 
 
 def test_registration_creates_owner_session_and_rejects_duplicate(client: TestClient) -> None:
@@ -133,6 +145,12 @@ def test_dataset_owner_can_delete_import_and_viewer_cannot(client: TestClient) -
         files={"file": ("sales.csv", "amount\n12\n", "text/csv")},
     )
     dataset_id = uploaded.json()["id"]
+    pipeline_response = client.post("/api/v1/pipelines", headers={"X-Organization-ID": organization_id}, json={
+        "name": "Pipeline propriétaire",
+        "source_dataset_id": dataset_id,
+        "steps": [{"op": "select_columns", "columns": ["amount"]}],
+    })
+    assert pipeline_response.status_code == 201, pipeline_response.text
 
     other_client = TestClient(app)
     viewer_session = create_account(other_client, "viewer@example.com")
@@ -142,6 +160,21 @@ def test_dataset_owner_can_delete_import_and_viewer_cannot(client: TestClient) -
 
         db.add(Membership(organization_id=UUID(organization_id), user_id=UUID(viewer_id), role=MembershipRole.VIEWER))
         db.commit()
+    viewer_upload = other_client.post(
+        "/api/v1/datasets",
+        headers={"X-Organization-ID": organization_id},
+        files={"file": ("new.csv", "value\n2\n", "text/csv")},
+    )
+    viewer_analysis = other_client.post("/api/v1/analyses", headers={"X-Organization-ID": organization_id}, json={
+        "title": "Analyse interdite", "dataset_id": dataset_id, "column_name": "amount",
+    })
+    viewer_run = other_client.post(
+        f"/api/v1/pipelines/{pipeline_response.json()['id']}/runs",
+        headers={"X-Organization-ID": organization_id},
+    )
+    assert viewer_upload.status_code == 403
+    assert viewer_analysis.status_code == 403
+    assert viewer_run.status_code == 403
     denied = other_client.delete(f"/api/v1/datasets/{dataset_id}", headers={"X-Organization-ID": organization_id})
     assert denied.status_code == 403
 

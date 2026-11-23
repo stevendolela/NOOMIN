@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from noomin_api.api.dependencies import get_current_organization, get_current_user
+from noomin_api.api.permissions import Permission, require_permission
 from noomin_api.db.session import get_db
 from noomin_api.models import Dataset, Membership, Organization, Pipeline, PipelineRun, User
 from noomin_api.schemas.pipeline import FilterRowsStep, PipelineCreate, PipelineResponse, PipelineRunResponse, RenameColumnsStep, SelectColumnsStep
@@ -16,8 +17,9 @@ router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
 def _require_editor(db: Session, organization: Organization, user: User) -> None:
     membership = db.scalar(select(Membership).where(Membership.organization_id == organization.id, Membership.user_id == user.id))
-    if membership is None or membership.role.value == "viewer":
-        raise HTTPException(status_code=403, detail="Votre rôle ne permet pas de modifier les pipelines.")
+    if membership is None:
+        raise HTTPException(status_code=403, detail="Vous n’avez pas accès à cette organisation.")
+    require_permission(membership.role, Permission.EDIT_DATA, "Votre rôle ne permet pas de modifier les pipelines.")
 
 
 def _validate_steps(body: PipelineCreate, source: Dataset) -> list[dict]:
