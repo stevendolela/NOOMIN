@@ -79,7 +79,7 @@ pip install -e '.[dev]'
 export DATABASE_URL=sqlite:///../../work/noomin-preview.sqlite
 export JWT_SECRET_KEY=local-noomin-preview-secret-key-32-chars
 export CELERY_TASK_ALWAYS_EAGER=true
-python -c 'from noomin_api.db.session import engine; from noomin_api.db.base import Base; import noomin_api.models; Base.metadata.create_all(engine)'
+alembic upgrade head
 uvicorn noomin_api.main:app --reload
 ```
 
