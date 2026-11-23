@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from noomin_api.api.dependencies import get_current_organization, get_current_user
+from noomin_api.api.audit import record_audit
 from noomin_api.api.permissions import Permission, require_permission
 from noomin_api.db.session import get_db
 from noomin_api.models import Dataset, Membership, Organization, Pipeline, PipelineRun, User
@@ -110,6 +111,7 @@ def create_pipeline(
         steps=_validate_steps(body, source),
     )
     db.add(pipeline)
+    record_audit(db, organization.id, user.id, "pipeline.created", "pipeline", pipeline.id, {"step_count": len(pipeline.steps)})
     db.commit()
     db.refresh(pipeline)
     return _pipeline_response(db, pipeline)
@@ -157,6 +159,7 @@ def run_pipeline(
         raise HTTPException(status_code=404, detail="Pipeline introuvable.")
     run = PipelineRun(pipeline_id=pipeline.id, status="queued")
     db.add(run)
+    record_audit(db, organization.id, user.id, "pipeline.run_requested", "pipeline_run", run.id, {"pipeline_id": str(pipeline.id)})
     db.commit()
     db.refresh(run)
     queued_response = _run_response(run)

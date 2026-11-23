@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from noomin_api.api.dependencies import get_current_organization, get_current_user
+from noomin_api.api.audit import record_audit
 from noomin_api.api.permissions import Permission, require_permission
 from noomin_api.db.session import get_db
 from noomin_api.models import Dataset, DatasetRow, Membership, Organization, Pipeline, PipelineRun, SavedAnalysis, User
@@ -101,6 +102,7 @@ async def upload_dataset(
     db.add(dataset)
     db.flush()
     db.add_all([DatasetRow(dataset_id=dataset.id, row_number=i, values=row) for i, row in enumerate(rows, start=1)])
+    record_audit(db, organization.id, user.id, "dataset.imported", "dataset", dataset.id, {"row_count": len(rows), "column_count": len(columns), "byte_size": len(payload)})
     db.commit()
     db.refresh(dataset)
     return _summary(dataset)
@@ -150,6 +152,7 @@ def delete_dataset(
         run.output_dataset_id = None
     for analysis in db.scalars(select(SavedAnalysis).where(SavedAnalysis.dataset_id == dataset.id)).all():
         db.delete(analysis)
+    record_audit(db, organization.id, user.id, "dataset.deleted", "dataset", dataset.id)
     db.delete(dataset)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

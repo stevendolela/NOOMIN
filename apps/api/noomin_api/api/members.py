@@ -9,9 +9,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from noomin_api.api.dependencies import get_current_organization, get_current_user
+from noomin_api.api.audit import record_audit
 from noomin_api.api.permissions import Permission, require_permission
 from noomin_api.db.session import get_db
-from noomin_api.core.security import create_access_token, hash_password, read_access_token
+from noomin_api.core.security import create_access_token, create_csrf_token, hash_password, read_access_token
 from noomin_api.core.config import get_settings
 from noomin_api.models import Membership, MembershipRole, Organization, OrganizationInvitation, User
 from noomin_api.schemas.auth import OrganizationResponse, SessionResponse, UserResponse
@@ -79,7 +80,9 @@ def update_member_role(
         owners = db.scalar(select(func.count()).select_from(Membership).where(Membership.organization_id == organization.id, Membership.role == MembershipRole.OWNER)) or 0
         if owners <= 1:
             raise HTTPException(status_code=409, detail="L’organisation doit conserver au moins un propriétaire.")
+    previous_role = target.role.value
     target.role = body.role
+    record_audit(db, organization.id, user.id, "member.role_changed", "membership", target.user_id, {"previous_role": previous_role, "new_role": body.role.value})
     db.commit()
     db.refresh(target)
     return _member_response(target)
@@ -102,6 +105,7 @@ def remove_member(
         owners = db.scalar(select(func.count()).select_from(Membership).where(Membership.organization_id == organization.id, Membership.role == MembershipRole.OWNER)) or 0
         if owners <= 1:
             raise HTTPException(status_code=409, detail="L’organisation doit conserver au moins un propriétaire.")
+    record_audit(db, organization.id, user.id, "member.removed", "membership", target.user_id, {"role": target.role.value})
     db.delete(target)
     db.commit()
 
@@ -137,6 +141,8 @@ def create_invitation(
     token = secrets.token_urlsafe(32)
     invitation = OrganizationInvitation(organization_id=organization.id, created_by=user.id, email=email, role=body.role, token_hash=_token_digest(token), expires_at=_now() + timedelta(days=7))
     db.add(invitation)
+    db.flush()
+    record_audit(db, organization.id, user.id, "invitation.created", "invitation", invitation.id, {"role": body.role.value})
     db.commit()
     db.refresh(invitation)
     return InvitationCreated(id=invitation.id, email=invitation.email, role=invitation.role, token=token, expires_at=invitation.expires_at, created_at=invitation.created_at)
@@ -153,6 +159,7 @@ def revoke_invitation(
     invitation = db.scalar(select(OrganizationInvitation).where(OrganizationInvitation.id == invitation_id, OrganizationInvitation.organization_id == organization.id, OrganizationInvitation.accepted_at.is_(None)))
     if invitation is None:
         raise HTTPException(status_code=404, detail="Invitation introuvable.")
+    record_audit(db, organization.id, user.id, "invitation.revoked", "invitation", invitation.id, {"role": invitation.role.value})
     db.delete(invitation)
     db.commit()
 
@@ -202,13 +209,16 @@ def accept_invitation(
         raise HTTPException(status_code=409, detail="Ce compte est déjà membre de l’organisation.")
     db.add(Membership(organization_id=invitation.organization_id, user_id=user.id, role=invitation.role))
     invitation.accepted_at = _now()
+    record_audit(db, invitation.organization_id, user.id, "invitation.accepted", "membership", user.id, {"role": invitation.role.value})
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="Cette invitation a déjà été utilisée.")
     db.refresh(user)
-    response.set_cookie(key="session", value=create_access_token(user.id, user.session_version), max_age=60 * 60 * 12, httponly=True, secure=get_settings().secure_cookies, samesite="lax", path="/")
+    session_token = create_access_token(user.id, user.session_version)
+    response.set_cookie(key="session", value=session_token, max_age=60 * 60 * 12, httponly=True, secure=get_settings().secure_cookies, samesite="lax", path="/")
+    response.set_cookie(key="csrf_token", value=create_csrf_token(session_token), max_age=60 * 60 * 12, httponly=False, secure=get_settings().secure_cookies, samesite="lax", path="/")
     memberships = db.scalars(select(Membership).where(Membership.user_id == user.id).order_by(Membership.created_at)).all()
     organizations = []
     for membership in memberships:

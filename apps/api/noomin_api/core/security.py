@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+import hmac
 from uuid import UUID
 
 import jwt
@@ -24,6 +25,11 @@ def create_access_token(user_id: UUID, session_version: int = 0) -> str:
     now = datetime.now(UTC)
     payload = {"sub": str(user_id), "ver": session_version, "iat": now, "exp": now + TOKEN_TTL}
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=ALGORITHM)
+
+
+def create_csrf_token(session_token: str) -> str:
+    secret = get_settings().jwt_secret_key.encode("utf-8")
+    return hmac.digest(secret, f"csrf:{session_token}".encode("utf-8"), "sha256").hex()
 
 
 def read_access_token(token: str) -> tuple[UUID, int] | None:

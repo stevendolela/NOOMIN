@@ -53,6 +53,8 @@ def test_role_permission_matrix_matches_product_roles() -> None:
     assert not has_permission(MembershipRole.MEMBER, Permission.MANAGE_MEMBERS)
     assert has_permission(MembershipRole.VIEWER, Permission.READ_DATA)
     assert not has_permission(MembershipRole.VIEWER, Permission.EDIT_DATA)
+    assert has_permission(MembershipRole.ADMIN, Permission.VIEW_AUDIT_LOG)
+    assert not has_permission(MembershipRole.MEMBER, Permission.VIEW_AUDIT_LOG)
 
 
 def test_owner_can_manage_members_but_cannot_remove_last_owner(client: TestClient) -> None:
@@ -159,6 +161,35 @@ def test_login_throttle_blocks_repeated_failures_and_resets_after_window(client:
         db.commit()
     success = client.post("/api/v1/auth/login", json={"email": "throttle@example.com", "password": "correct-horse-2026!"})
     assert success.status_code == 200
+
+
+def test_csrf_guard_rejects_cross_origin_and_requires_signed_token(client: TestClient) -> None:
+    create_account(client)
+    csrf = client.cookies.get("csrf_token")
+    assert csrf
+    bad_origin = client.post("/api/v1/auth/logout", headers={"Origin": "https://untrusted.example"})
+    assert bad_origin.status_code == 403
+    missing_token = client.post("/api/v1/auth/logout", headers={"Origin": "http://localhost:5173"})
+    assert missing_token.status_code == 403
+    accepted = client.post("/api/v1/auth/logout", headers={"Origin": "http://localhost:5173", "X-CSRF-Token": csrf})
+    assert accepted.status_code == 204
+
+
+def test_audit_log_records_safe_data_actions_and_is_tenant_scoped(client: TestClient) -> None:
+    owner = create_account(client)
+    org_id = owner["organizations"][0]["id"]
+    uploaded = client.post("/api/v1/datasets", headers={"X-Organization-ID": org_id}, files={"file": ("private.csv", "value\nsecret-cell\n", "text/csv")})
+    assert uploaded.status_code == 201
+    audit = client.get("/api/v1/audit?limit=10", headers={"X-Organization-ID": org_id})
+    assert audit.status_code == 200, audit.text
+    event = next(item for item in audit.json()["items"] if item["action"] == "dataset.imported")
+    assert event["metadata"] == {"row_count": 1, "column_count": 1, "byte_size": 18}
+    assert "secret-cell" not in str(event)
+    other = TestClient(client.app)
+    second = create_account(other, "other.audit@example.com")
+    denied = other.get("/api/v1/audit", headers={"X-Organization-ID": org_id})
+    assert denied.status_code == 403
+    assert second["organizations"][0]["id"] != org_id
 
 
 def test_registration_creates_owner_session_and_rejects_duplicate(client: TestClient) -> None:

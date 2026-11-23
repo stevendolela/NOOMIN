@@ -9,9 +9,10 @@ from sqlalchemy import case, delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from noomin_api.api.audit import record_audit
 from noomin_api.api.dependencies import get_current_user
 from noomin_api.core.config import get_settings
-from noomin_api.core.security import create_access_token, hash_password, verify_password
+from noomin_api.core.security import create_access_token, create_csrf_token, hash_password, verify_password
 from noomin_api.db.session import get_db
 from noomin_api.models import AuthLoginThrottle, Membership, MembershipRole, Organization, User
 from noomin_api.schemas.auth import LoginRequest, OrganizationResponse, RegisterRequest, SessionResponse, UserResponse
@@ -78,15 +79,17 @@ def _record_failed_login(db: Session, bucket: str, now: datetime, failure_limit:
 
 
 def _set_session_cookie(response: Response, user: User) -> None:
+    token = create_access_token(user.id, user.session_version)
     response.set_cookie(
         key=COOKIE_NAME,
-        value=create_access_token(user.id, user.session_version),
+        value=token,
         max_age=COOKIE_TTL,
         httponly=True,
         secure=get_settings().secure_cookies,
         samesite="lax",
         path="/",
     )
+    response.set_cookie(key="csrf_token", value=create_csrf_token(token), max_age=COOKIE_TTL, httponly=False, secure=get_settings().secure_cookies, samesite="lax", path="/")
 
 
 def _session_payload(user: User, db: Session) -> SessionResponse:
@@ -111,6 +114,7 @@ def register(body: RegisterRequest, response: Response, db: Session = Depends(ge
     try:
         db.flush()
         db.add(Membership(organization_id=organization.id, user_id=user.id, role=MembershipRole.OWNER))
+        record_audit(db, organization.id, user.id, "organization.created", "organization", organization.id)
         db.commit()
         db.refresh(user)
     except IntegrityError as exc:
@@ -144,7 +148,7 @@ def login(body: LoginRequest, request: Request, response: Response, db: Session 
 
 
 @router.get("/session", response_model=SessionResponse)
-def current_session(request: Request, db: Session = Depends(get_db)) -> SessionResponse:
+def current_session(request: Request, response: Response, db: Session = Depends(get_db)) -> SessionResponse:
     token = request.cookies.get(COOKIE_NAME)
     from noomin_api.core.security import read_access_token
 
@@ -153,6 +157,8 @@ def current_session(request: Request, db: Session = Depends(get_db)) -> SessionR
     user = db.get(User, user_id) if user_id else None
     if user is None or not user.is_active or user.session_version != token_version:
         raise HTTPException(status_code=401, detail="Session invalide ou expirée.")
+    if token:
+        response.set_cookie(key="csrf_token", value=create_csrf_token(token), max_age=COOKIE_TTL, httponly=False, secure=get_settings().secure_cookies, samesite="lax", path="/")
     return _session_payload(user, db)
 
 
@@ -161,5 +167,6 @@ def logout(response: Response, user: User = Depends(get_current_user), db: Sessi
     user.session_version += 1
     db.commit()
     response.delete_cookie(key=COOKIE_NAME, path="/", httponly=True, secure=get_settings().secure_cookies, samesite="lax")
+    response.delete_cookie(key="csrf_token", path="/", httponly=False, secure=get_settings().secure_cookies, samesite="lax")
     response.status_code = status.HTTP_204_NO_CONTENT
     return response

@@ -9,6 +9,7 @@ NOOMIN est le nom de travail du produit. La disponibilité de la marque et du do
 - Sélecteur d’organisation pour les comptes multi-organisation ; propriétaires et administrateurs peuvent lister les membres, modifier les rôles autorisés et retirer les adhésions. L’organisation conserve toujours au moins un propriétaire.
 - Invitations par lien secret à usage unique, valables 7 jours, avec acceptation et création du compte invité ; le lien doit être partagé manuellement, aucun e-mail n’est envoyé.
 - Connexions protégées par une limite persistée : 10 échecs par compte/adresse IP ou 60 échecs par adresse IP sur 15 minutes ; les identifiants de limitation sont stockés sous forme HMAC.
+- Mutations navigateur protégées par validation de l’origine et jeton CSRF signé lié à la session ; journal d’audit tenant-scoped des imports/suppressions, analyses, pipelines, membres et invitations, consultable par propriétaire/administrateur.
 - Import d’un CSV UTF-8 (10 Mo maximum, 20 000 lignes et 200 colonnes maximum), stockage des valeurs dans PostgreSQL et aperçu paginé des 100 premières lignes.
 - Suppression d’un jeu de données depuis la liste, réservée aux rôles pouvant modifier ; les analyses et pipelines qui dépendent de la source sont également supprimés après confirmation.
 - Profil descriptif calculé sur les valeurs importées : type de colonne, valeurs présentes/distinctes et distribution des colonnes numériques ; les distributions peuvent être enregistrées comme analyses dans l’organisation.
@@ -67,9 +68,9 @@ cd ../.. && npm run build && npm run lint
 
 ## Sécurité et limites de déploiement
 
-Les mots de passe sont hachés avec Argon2id et le cookie est HTTP-only, `SameSite=Lax`, avec l’attribut `Secure` hors développement. La déconnexion révoque côté serveur les jetons de session de l’utilisateur. Les permissions sont contrôlées côté API selon le rôle. Hors environnements locaux/de test, l’API refuse certains secrets JWT de développement connus et les origines CORS wildcard (`*`). Ce contrôle ne remplace pas la génération et la gestion d’un secret robuste. Le health check vérifie PostgreSQL et répond `503` si la base est indisponible. Remplacez tous les identifiants de développement avant tout déploiement.
+Les mots de passe sont hachés avec Argon2id. Le cookie de session est HTTP-only et `SameSite=Lax`; un cookie CSRF séparé est lié cryptographiquement à la session. Les cookies portent l’attribut `Secure` hors développement. La déconnexion révoque côté serveur les jetons de session de l’utilisateur. Les permissions sont contrôlées côté API selon le rôle. Hors environnements locaux/de test, l’API refuse certains secrets JWT de développement connus et les origines CORS wildcard (`*`). Ce contrôle ne remplace pas la génération et la gestion d’un secret robuste. Le health check vérifie PostgreSQL et répond `503` si la base est indisponible. Remplacez tous les identifiants de développement avant tout déploiement.
 
-Ce MVP n’inclut pas encore la vérification d’adresse e-mail, des sauvegardes, des journaux d’audit ni une revue de sécurité de production. La limitation actuelle concerne les connexions et ne remplace pas une protection globale contre les abus. Le health check ne vérifie pas Redis ni le worker Celery.
+Ce MVP n’inclut pas encore la vérification d’adresse e-mail, des sauvegardes ni une revue de sécurité de production. Les journaux d’audit n’ont pas encore de politique de rétention. La limitation actuelle concerne les connexions et ne remplace pas une protection globale contre les abus. Le health check ne vérifie pas Redis ni le worker Celery.
 
 ### Aperçu local sans Docker
 
@@ -87,4 +88,4 @@ alembic upgrade head
 uvicorn noomin_api.main:app --reload
 ```
 
-Dans un second terminal, à la racine du dépôt : `npm install && npm run dev`. Les inscriptions, imports et résultats de pipeline de ce mode sont conservés dans `work/noomin-preview.sqlite` sur cette machine. Les tâches Celery s’exécutent localement en mode eager, sans Redis ; Compose utilise Redis et le worker pour les traitements asynchrones. Le mode SQLite crée automatiquement la table additive des invitations si elle manque, sans modifier les tables ni données existantes.
+Dans un second terminal, à la racine du dépôt : `npm install && npm run dev`. Les inscriptions, imports et résultats de pipeline de ce mode sont conservés dans `work/noomin-preview.sqlite` sur cette machine. Les tâches Celery s’exécutent localement en mode eager, sans Redis ; Compose utilise Redis et le worker pour les traitements asynchrones. Le mode SQLite crée automatiquement les tables additives des invitations, limiteurs de connexion et journaux d’audit si elles manquent, sans modifier les tables ni données existantes.

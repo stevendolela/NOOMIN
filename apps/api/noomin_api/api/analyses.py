@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from noomin_api.api.dependencies import get_current_organization, get_current_user
+from noomin_api.api.audit import record_audit
 from noomin_api.api.permissions import Permission, require_permission
 from noomin_api.db.session import get_db
 from noomin_api.models import Dataset, DatasetRow, Membership, Organization, SavedAnalysis, User
@@ -62,6 +63,7 @@ def create_analysis(
         profile=profile.model_dump(mode="json"),
     )
     db.add(analysis)
+    record_audit(db, organization.id, user.id, "analysis.saved", "analysis", analysis.id)
     db.commit()
     db.refresh(analysis)
     return _response(db, analysis)

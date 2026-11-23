@@ -10,11 +10,12 @@ class Permission(StrEnum):
     EDIT_DATA = "edit_data"
     MANAGE_MEMBERS = "manage_members"
     MANAGE_WORKSPACE = "manage_workspace"
+    VIEW_AUDIT_LOG = "view_audit_log"
 
 
 ROLE_PERMISSIONS: dict[MembershipRole, frozenset[Permission]] = {
     MembershipRole.OWNER: frozenset(Permission),
-    MembershipRole.ADMIN: frozenset({Permission.READ_DATA, Permission.EDIT_DATA, Permission.MANAGE_MEMBERS}),
+    MembershipRole.ADMIN: frozenset({Permission.READ_DATA, Permission.EDIT_DATA, Permission.MANAGE_MEMBERS, Permission.VIEW_AUDIT_LOG}),
     # `member` remains the stored role for backward compatibility; product-facing name is Analyst.
     MembershipRole.MEMBER: frozenset({Permission.READ_DATA, Permission.EDIT_DATA}),
     MembershipRole.VIEWER: frozenset({Permission.READ_DATA}),

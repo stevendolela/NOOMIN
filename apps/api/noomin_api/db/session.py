@@ -11,10 +11,11 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 # The local SQLite preview does not run the PostgreSQL Alembic chain. Create
 # only this new additive table there so existing preview data remains intact.
 if database_url.startswith("sqlite"):
-    from noomin_api.models import AuthLoginThrottle, OrganizationInvitation
+    from noomin_api.models import AuditLog, AuthLoginThrottle, OrganizationInvitation
 
     OrganizationInvitation.__table__.create(engine, checkfirst=True)
     AuthLoginThrottle.__table__.create(engine, checkfirst=True)
+    AuditLog.__table__.create(engine, checkfirst=True)
 
 
 def get_db():
