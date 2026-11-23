@@ -18,6 +18,8 @@ NOOMIN est le nom de travail du produit. La disponibilité de la marque et du do
 
 Planification récurrente, connecteurs externes, tableaux de bord composables, envoi d’invitations par e-mail, IA, facturation et vérification d’e-mail ne sont pas encore implémentés. Aucun service de données ou modèle IA externe n’est présenté comme connecté.
 
+Le MFA, le SSO client (Microsoft Entra ID / Active Directory fédéré) et le provisioning d’annuaire sont également à venir ; le périmètre prévu est suivi dans [la feuille de route identité](docs/phase1/IDENTITY_ROADMAP.md).
+
 ## Démarrage complet
 
 Prérequis : Docker Engine avec Docker Compose v2.
