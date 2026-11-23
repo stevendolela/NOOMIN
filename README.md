@@ -31,9 +31,20 @@ docker compose up --build
 - Interface : <http://localhost:5173>
 - API : <http://localhost:8000>
 - Documentation OpenAPI : <http://localhost:8000/docs>
-- Liveness : <http://localhost:8000/api/v1/health>
+- Liveness API : <http://localhost:8000/api/v1/health>
+- Readiness (PostgreSQL + Redis) : <http://localhost:8000/api/v1/ready>
 
 Compose attend que PostgreSQL et Redis soient prêts. L’API applique les migrations Alembic avant de démarrer. Nginx sert l’interface et relaie `/api/` vers FastAPI.
+Compose expose l’état des services : l’API n’est prête qu’après connexion à PostgreSQL et Redis, et le worker est vérifié par un ping Celery. L’interface attend que l’API soit saine avant de démarrer.
+
+Après le démarrage, vérifiez les services et la révision de base :
+
+```bash
+docker compose ps
+docker compose exec api alembic -c alembic.ini current
+```
+
+Les services `db`, `redis`, `api`, `worker` et `web` doivent être `healthy`. L’interface de contrôle comprend ensuite l’inscription, l’import d’un CSV, le profil de données et la création puis l’exécution d’un pipeline. Cette vérification manuelle avec des conteneurs réels reste nécessaire sur une machine avec Docker ; elle n’est pas exécutée par les tests locaux.
 
 ## Développement local
 
