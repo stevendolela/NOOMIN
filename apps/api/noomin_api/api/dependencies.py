@@ -10,11 +10,12 @@ from noomin_api.models import Membership, Organization, User
 
 
 def get_current_user(session: str | None = Cookie(default=None), db: Session = Depends(get_db)) -> User:
-    user_id = read_access_token(session) if session else None
-    if user_id is None:
+    token_data = read_access_token(session) if session else None
+    if token_data is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session invalide ou expirée.")
+    user_id, token_version = token_data
     user = db.get(User, user_id)
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or user.session_version != token_version:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Compte indisponible.")
     return user
 

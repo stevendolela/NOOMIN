@@ -59,7 +59,11 @@ def test_registration_creates_owner_session_and_rejects_duplicate(client: TestCl
 
 def test_login_sets_session_and_logout_clears_it(client: TestClient) -> None:
     create_account(client)
+    old_cookie = client.cookies.get("session")
     client.post("/api/v1/auth/logout")
+    revoked_client = TestClient(app)
+    revoked_client.cookies.set("session", old_cookie)
+    assert revoked_client.get("/api/v1/auth/session").status_code == 401
     response = client.post("/api/v1/auth/login", json={"email": "camille@example.com", "password": "correct-horse-2026!"})
     assert response.status_code == 200
     assert client.get("/api/v1/auth/session").status_code == 200

@@ -63,9 +63,9 @@ cd ../.. && npm run build && npm run lint
 
 ## Sécurité et limites de déploiement
 
-Les mots de passe sont hachés avec Argon2id et le cookie est HTTP-only, `SameSite=Lax`, avec l’attribut `Secure` hors développement. Remplacez tous les identifiants de développement et utilisez une clé JWT aléatoire avant tout déploiement.
+Les mots de passe sont hachés avec Argon2id et le cookie est HTTP-only, `SameSite=Lax`, avec l’attribut `Secure` hors développement. La déconnexion révoque désormais côté serveur les jetons de session de l’utilisateur. Le health check vérifie la connexion à PostgreSQL et répond `503` si la base est indisponible. Remplacez tous les identifiants de développement et utilisez une clé JWT aléatoire avant tout déploiement.
 
-Ce MVP n’inclut pas encore la vérification d’adresse e-mail, la limitation de tentatives de connexion, l’invalidation serveur de sessions déjà émises, la gestion des invitations, les sauvegardes, les journaux d’audit ni une revue de sécurité de production. Le health check est un contrôle de disponibilité applicative ; il ne valide pas PostgreSQL ou Redis.
+Ce MVP n’inclut pas encore la vérification d’adresse e-mail, la limitation de tentatives de connexion, la gestion des invitations, les sauvegardes, les journaux d’audit ni une revue de sécurité de production. Le health check ne vérifie pas Redis ni le worker Celery.
 
 ### Aperçu local sans Docker
 

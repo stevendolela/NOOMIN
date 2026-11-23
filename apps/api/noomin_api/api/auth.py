@@ -18,10 +18,10 @@ COOKIE_NAME = "session"
 COOKIE_TTL = 60 * 60 * 12
 
 
-def _set_session_cookie(response: Response, user_id) -> None:
+def _set_session_cookie(response: Response, user: User) -> None:
     response.set_cookie(
         key=COOKIE_NAME,
-        value=create_access_token(user_id),
+        value=create_access_token(user.id, user.session_version),
         max_age=COOKIE_TTL,
         httponly=True,
         secure=get_settings().secure_cookies,
@@ -57,7 +57,7 @@ def register(body: RegisterRequest, response: Response, db: Session = Depends(ge
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Impossible de créer le compte avec ces informations.") from exc
-    _set_session_cookie(response, user.id)
+    _set_session_cookie(response, user)
     return _session_payload(user, db)
 
 
@@ -67,7 +67,7 @@ def login(body: LoginRequest, response: Response, db: Session = Depends(get_db))
     user = db.scalar(select(User).where(User.email == email))
     if user is None or not user.is_active or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Adresse e-mail ou mot de passe incorrect.")
-    _set_session_cookie(response, user.id)
+    _set_session_cookie(response, user)
     return _session_payload(user, db)
 
 
@@ -76,15 +76,18 @@ def current_session(request: Request, db: Session = Depends(get_db)) -> SessionR
     token = request.cookies.get(COOKIE_NAME)
     from noomin_api.core.security import read_access_token
 
-    user_id = read_access_token(token) if token else None
+    token_data = read_access_token(token) if token else None
+    user_id, token_version = token_data if token_data else (None, None)
     user = db.get(User, user_id) if user_id else None
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or user.session_version != token_version:
         raise HTTPException(status_code=401, detail="Session invalide ou expirée.")
     return _session_payload(user, db)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(response: Response, user: User = Depends(get_current_user)) -> Response:
+def logout(response: Response, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> Response:
+    user.session_version += 1
+    db.commit()
     response.delete_cookie(key=COOKIE_NAME, path="/", httponly=True, secure=get_settings().secure_cookies, samesite="lax")
     response.status_code = status.HTTP_204_NO_CONTENT
     return response
