@@ -157,3 +157,32 @@ def test_celery_pipeline_filters_and_creates_a_new_dataset(client: TestClient, m
     assert output.json()["row_count"] == 2
     assert output.json()["columns"] == ["date", "revenue_selected"]
     assert output.json()["preview"][0] == {"date": "2026-01-02", "revenue_selected": "25"}
+
+
+def test_numeric_analysis_is_saved_and_scoped_to_organization(client: TestClient) -> None:
+    session = create_account(client)
+    organization_id = session["organizations"][0]["id"]
+    uploaded = client.post(
+        "/api/v1/datasets",
+        headers={"X-Organization-ID": organization_id},
+        files={"file": ("costs.csv", "department,cost\nDesign,12\nOperations,18\nSales,30\n", "text/csv")},
+    )
+    dataset = uploaded.json()
+    saved = client.post("/api/v1/analyses", headers={"X-Organization-ID": organization_id}, json={
+        "title": "Répartition des coûts",
+        "dataset_id": dataset["id"],
+        "column_name": "cost",
+    })
+    assert saved.status_code == 201, saved.text
+    result = saved.json()
+    assert result["dataset_name"] == "costs"
+    assert result["column_profile"]["minimum"] == 12
+    assert result["column_profile"]["maximum"] == 30
+    assert sum(bin["count"] for bin in result["column_profile"]["distribution"]) == 3
+    assert client.get("/api/v1/analyses", headers={"X-Organization-ID": organization_id}).json()[0]["id"] == result["id"]
+    text_chart = client.post("/api/v1/analyses", headers={"X-Organization-ID": organization_id}, json={
+        "title": "Répartition des services",
+        "dataset_id": dataset["id"],
+        "column_name": "department",
+    })
+    assert text_chart.status_code == 422

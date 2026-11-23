@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from noomin_api.api.analyses import router as analyses_router
 from noomin_api.api.auth import router as auth_router
 from noomin_api.api.datasets import router as datasets_router
 from noomin_api.api.health import router as health_router
@@ -14,6 +15,7 @@ app.include_router(health_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(datasets_router, prefix=settings.api_v1_prefix)
 app.include_router(pipelines_router, prefix=settings.api_v1_prefix)
+app.include_router(analyses_router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/", include_in_schema=False)

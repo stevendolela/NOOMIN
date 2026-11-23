@@ -19,3 +19,4 @@ export type ColumnProfile = { name: string; data_type: 'number' | 'text'; non_nu
 export type DatasetProfile = { dataset_id: string; row_count: number; columns: ColumnProfile[] };
 export type PipelineRun = { id: string; status: 'queued' | 'running' | 'succeeded' | 'failed'; output_dataset_id: string | null; error_message: string | null; created_at: string; started_at: string | null; finished_at: string | null };
 export type Pipeline = { id: string; name: string; source_dataset_id: string; source_dataset_name: string; steps: Array<Record<string, unknown>>; created_at: string; last_run: PipelineRun | null };
+export type SavedAnalysis = { id: string; title: string; dataset_id: string; dataset_name: string; column_profile: ColumnProfile; created_at: string };

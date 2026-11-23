@@ -1,10 +1,8 @@
 import csv
 import io
-import math
-from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -12,7 +10,8 @@ from noomin_api.api.dependencies import get_current_organization, get_current_us
 from noomin_api.db.session import get_db
 from noomin_api.models import Dataset, DatasetRow, Membership, Organization, User
 from noomin_api.schemas.dataset import DatasetDetail, DatasetSummary
-from noomin_api.schemas.profile import ColumnProfile, DatasetProfile, HistogramBin
+from noomin_api.schemas.profile import DatasetProfile
+from noomin_api.services.profiling import profile_columns
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -132,42 +131,5 @@ def profile_dataset(
     if dataset is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Jeu de données introuvable.")
     rows = db.scalars(select(DatasetRow).where(DatasetRow.dataset_id == dataset.id).order_by(DatasetRow.row_number)).all()
-    profiles = []
-    for column in dataset.columns:
-        present = [row.values[column] for row in rows if row.values.get(column) not in (None, "")]
-        unique_count = len(set(present))
-        numeric_values = []
-        numeric = True
-        for value in present:
-            try:
-                parsed = float(Decimal(value))
-            except (InvalidOperation, ValueError, OverflowError):
-                numeric = False
-                break
-            if not math.isfinite(parsed):
-                numeric = False
-                break
-            numeric_values.append(parsed)
-        bins = []
-        minimum = maximum = average = None
-        data_type = "number" if numeric and bool(numeric_values) else "text"
-        if data_type == "number":
-            minimum = min(numeric_values)
-            maximum = max(numeric_values)
-            average = math.fsum(value / len(numeric_values) for value in numeric_values)
-            span = maximum - minimum
-            if minimum == maximum or not math.isfinite(span):
-                bins = [HistogramBin(start=minimum, end=maximum, count=len(numeric_values))]
-            else:
-                bin_count = min(8, max(1, int(math.sqrt(len(numeric_values)))))
-                width = span / bin_count
-                if width == 0:
-                    bins = [HistogramBin(start=minimum, end=maximum, count=len(numeric_values))]
-                else:
-                    counts = [0] * bin_count
-                    for value in numeric_values:
-                        index = min(int((value - minimum) / width), bin_count - 1)
-                        counts[index] += 1
-                    bins = [HistogramBin(start=minimum + index * width, end=maximum if index == bin_count - 1 else minimum + (index + 1) * width, count=count) for index, count in enumerate(counts)]
-        profiles.append(ColumnProfile(name=column, data_type=data_type, non_null_count=len(present), unique_count=unique_count, minimum=minimum, maximum=maximum, average=average, distribution=bins))
+    profiles = profile_columns(dataset.columns, [row.values for row in rows])
     return DatasetProfile(dataset_id=str(dataset.id), row_count=dataset.row_count, columns=profiles)

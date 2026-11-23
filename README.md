@@ -7,11 +7,11 @@ NOOMIN est le nom de travail du produit. La disponibilité de la marque et du do
 - Création de compte avec une organisation et un rôle propriétaire ; connexion et déconnexion par cookie de session HTTP-only.
 - Accès aux données limité aux organisations auxquelles le compte appartient. Le rôle `viewer` peut consulter sans importer.
 - Import d’un CSV UTF-8 (10 Mo maximum, 20 000 lignes et 200 colonnes maximum), stockage des valeurs dans PostgreSQL et aperçu paginé des 100 premières lignes.
-- Profil descriptif calculé sur les valeurs importées : type de colonne, valeurs présentes/distinctes et distribution des colonnes numériques.
+- Profil descriptif calculé sur les valeurs importées : type de colonne, valeurs présentes/distinctes et distribution des colonnes numériques ; les distributions peuvent être enregistrées comme analyses dans l’organisation.
 - Pipelines réels de sélection/renommage de colonnes et filtrage, exécutés en arrière-plan par Celery ; leurs résultats sont enregistrés comme nouveaux jeux de données.
 - Interface React/TypeScript responsive, Vite, Tailwind et composants selon les conventions shadcn/ui.
 
-Planification récurrente, connecteurs externes, tableaux de bord enregistrés, invitations, IA, facturation et vérification d’e-mail ne sont pas encore implémentés. L’interface les identifie comme indisponibles. Aucun service de données ou modèle IA externe n’est présenté comme connecté.
+Planification récurrente, connecteurs externes, tableaux de bord composables, invitations, IA, facturation et vérification d’e-mail ne sont pas encore implémentés. L’interface les identifie comme indisponibles. Aucun service de données ou modèle IA externe n’est présenté comme connecté.
 
 ## Démarrage complet
 

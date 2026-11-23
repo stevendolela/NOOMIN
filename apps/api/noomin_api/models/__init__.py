@@ -5,3 +5,6 @@ __all__ = ["Dataset", "DatasetRow", "Membership", "MembershipRole", "Organizatio
 from noomin_api.models.pipeline import Pipeline, PipelineRun
 
 __all__ += ["Pipeline", "PipelineRun"]
+from noomin_api.models.analysis import SavedAnalysis
+
+__all__ += ["SavedAnalysis"]
