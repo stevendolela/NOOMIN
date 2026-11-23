@@ -55,6 +55,32 @@ def test_role_permission_matrix_matches_product_roles() -> None:
     assert not has_permission(MembershipRole.VIEWER, Permission.EDIT_DATA)
 
 
+def test_owner_can_manage_members_but_cannot_remove_last_owner(client: TestClient) -> None:
+    session = create_account(client)
+    organization_id = session["organizations"][0]["id"]
+    owner_headers = {"X-Organization-ID": organization_id}
+    owner_id = session["user"]["id"]
+    listed = client.get("/api/v1/members", headers=owner_headers)
+    assert listed.status_code == 200
+    assert listed.json()[0]["role"] == "owner"
+    blocked = client.delete(f"/api/v1/members/{owner_id}", headers=owner_headers)
+    assert blocked.status_code == 409
+
+    invited = create_account(TestClient(client.app), "analyst@example.com")
+    analyst_id = invited["user"]["id"]
+    with client.app.state.test_session_factory() as db:
+        from noomin_api.models import Membership, MembershipRole
+        db.add(Membership(organization_id=UUID(organization_id), user_id=UUID(analyst_id), role=MembershipRole.MEMBER))
+        db.commit()
+    changed = client.patch(f"/api/v1/members/{analyst_id}", headers=owner_headers, json={"role": "viewer"})
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["role"] == "viewer"
+    removed = client.delete(f"/api/v1/members/{analyst_id}", headers=owner_headers)
+    assert removed.status_code == 204
+    hidden = client.get("/api/v1/members", headers={"X-Organization-ID": invited["organizations"][0]["id"]})
+    assert hidden.status_code == 403
+
+
 def test_registration_creates_owner_session_and_rejects_duplicate(client: TestClient) -> None:
     session = create_account(client)
     assert session["user"]["email"] == "camille@example.com"

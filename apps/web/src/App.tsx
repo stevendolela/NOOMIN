@@ -3,6 +3,7 @@ import { Activity, ArrowLeft, ArrowUpRight, Bell, Check, ChevronDown, CircleHelp
 import AuthScreen from './components/AuthScreen';
 import PipelineManager from './components/PipelineManager';
 import AnalyticsManager from './components/AnalyticsManager';
+import MemberManager from './components/MemberManager';
 import { Button } from './components/ui/button';
 import { api } from './lib/api';
 import type { ColumnProfile, Dataset, DatasetDetail, DatasetProfile, Session } from './lib/types';
@@ -111,14 +112,15 @@ export default function App() {
   if (booting) return <div className="boot-screen"><LoaderCircle className="spin" size={25}/><span>Ouverture de votre espace…</span></div>;
   if (!session) return <AuthScreen onAuthenticated={authenticated}/>;
 
-  const viewTitle = view === 'overview' ? 'Vue d’ensemble' : view === 'datasets' ? 'Jeux de données' : view === 'detail' ? (datasetDetail?.name ?? 'Jeu de données') : view === 'pipelines' ? 'Pipelines' : view === 'analytics' ? 'Analyses' : 'Paramètres';
+  const viewTitle = view === 'overview' ? 'Vue d’ensemble' : view === 'datasets' ? 'Jeux de données' : view === 'detail' ? (datasetDetail?.name ?? 'Jeu de données') : view === 'pipelines' ? 'Pipelines' : view === 'analytics' ? 'Analyses' : view === 'settings' ? 'Accès et membres' : 'Paramètres';
   const canUpload = organization?.role !== 'viewer';
+  const canManageMembers = organization?.role === 'owner' || organization?.role === 'admin';
 
   return <div className="shell app-shell">
     <input ref={fileInput} className="visually-hidden" type="file" accept=".csv,text/csv" onChange={(event) => void uploadSelected(event.target.files?.[0])}/>
     <aside className="sidebar">
       <a className="brand" href="#home" onClick={() => setView('overview')} aria-label="NOOMIN accueil"><span className="brand-mark"><span/><span/><span/><span/></span><span>noomin</span></a>
-      <div className="workspace-switch"><span className="workspace-avatar">{organization?.name.slice(0, 1).toUpperCase() ?? 'N'}</span><span className="workspace-copy"><b>{organization?.name ?? 'Votre espace'}</b><small>{organization?.role === 'owner' ? 'Propriétaire' : organization?.role === 'admin' ? 'Administrateur' : organization?.role === 'member' ? 'Analyste' : 'Lecteur'}</small></span><ChevronDown size={15}/></div>
+      <label className="workspace-switch"><span className="workspace-avatar">{organization?.name.slice(0, 1).toUpperCase() ?? 'N'}</span><span className="workspace-copy"><b>{organization?.name ?? 'Votre espace'}</b><small>{organization?.role === 'owner' ? 'Propriétaire' : organization?.role === 'admin' ? 'Administrateur' : organization?.role === 'member' ? 'Analyste' : 'Lecteur'}</small></span><select aria-label="Organisation active" value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); setView('overview'); setSelectedDatasetId(''); setDatasetDetail(null); }} disabled={(session?.organizations.length ?? 0) < 2}>{session?.organizations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><ChevronDown size={15}/></label>
       <div className="side-label">ESPACE DE TRAVAIL</div>
       <nav aria-label="Navigation principale">
         <NavItem label="Vue d’ensemble" active={view === 'overview'} onClick={() => setView('overview')} icon={<LayoutDashboard size={18}/>}/>
@@ -127,7 +129,7 @@ export default function App() {
         <NavItem label="Analyses" active={view === 'analytics'} onClick={() => setView('analytics')} icon={<Activity size={18}/>}/>
       </nav>
       <div className="side-label connections-label">ORGANISATION</div>
-      <div className="org-nav-row"><Settings2 size={17}/><span>Accès et membres</span><span className="coming-soon-tag">À venir</span></div>
+      <button className={`org-nav-row ${view === 'settings' ? 'selected' : ''}`} onClick={() => setView('settings')}><Settings2 size={17}/><span>Accès et membres</span></button>
       <div className="sidebar-bottom"><div className="help-card"><div className="help-icon"><CircleHelp size={17}/></div><b>Un espace qui grandit avec vous</b><p>Importez un premier fichier CSV pour explorer vos données.</p><button onClick={() => canUpload && fileInput.current?.click()}>Importer un CSV <ArrowUpRight size={14}/></button></div><button className="profile" onClick={() => void logout()} title="Se déconnecter"><span className="profile-avatar">{session.user.full_name.slice(0, 1).toUpperCase()}</span><span className="profile-copy"><b>{session.user.full_name}</b><small>{session.user.email}</small></span><LogOut size={15}/></button></div>
     </aside>
     <main className="main" id="home">
@@ -145,7 +147,7 @@ export default function App() {
         {view === 'detail' && <>{datasetDetail ? <><button className="back-link" onClick={() => setView('datasets')}><ArrowLeft size={15}/> Retour aux jeux de données</button><PageHeading eyebrow="JEU DE DONNÉES CSV" title={datasetDetail.name} description={`${datasetDetail.original_filename} · Importé le ${formatDate(datasetDetail.created_at)}`} action={<span className="source-badge"><Check size={14}/> Import terminé</span>}/><div className="detail-metrics"><Metric icon={<Table2 size={17}/>} label="Lignes" value={datasetDetail.row_count.toLocaleString('fr-FR')} note="Lignes conservées"/><Metric icon={<Database size={17}/>} label="Colonnes" value={datasetDetail.column_count.toLocaleString('fr-FR')} note={datasetDetail.columns.join(' · ')}/><Metric icon={<FileSpreadsheet size={17}/>} label="Taille du fichier" value={formatBytes(datasetDetail.byte_size)} note="Fichier CSV d’origine"/></div><div className="preview-heading"><div><h2>Aperçu des données</h2><p>Les {datasetDetail.preview.length.toLocaleString('fr-FR')} premières lignes de ce fichier.</p></div></div><DataPreview dataset={datasetDetail}/><ProfilePanel profile={datasetProfile} loading={loadingData}/></> : <LoadingPanel/>}</>}
         {view === 'pipelines' && organizationId && <PipelineManager organizationId={organizationId} datasets={datasets} canEdit={canUpload} onOutput={async () => { setDatasets(await api<Dataset[]>('/datasets', {}, organizationId)); }} onNotice={(text, kind) => setNotice({ text, kind })}/>}
         {view === 'analytics' && organizationId && <AnalyticsManager organizationId={organizationId} datasets={datasets} canEdit={canUpload} onNotice={(text, kind) => setNotice({ text, kind })}/>}
-        {view === 'settings' && <ComingSoon/>}
+        {view === 'settings' && organizationId && <MemberManager organizationId={organizationId} currentUserId={session.user.id} canManage={Boolean(canManageMembers)} role={organization?.role ?? ''} onNotice={(text, kind) => setNotice({ text, kind })}/>}
         <footer className="app-footer"><span>© 2026 NOOMIN</span><span className="footer-status">{datasets.length ? `${datasets.length.toLocaleString('fr-FR')} jeu${datasets.length > 1 ? 'x' : ''} de données importé${datasets.length > 1 ? 's' : ''}` : 'Aucune source connectée'} <span className="footer-divider">·</span> Environnement de démarrage</span><button onClick={() => setNotice({ text: 'Le centre d’aide sera ajouté prochainement.', kind: 'success' })}><CircleHelp size={14}/> Centre d’aide</button></footer>
       </div>
     </main>
@@ -172,13 +174,6 @@ function EmptyDatasets({ canUpload, onUpload }: { canUpload: boolean; onUpload: 
   return <div className="empty-datasets"><div className="empty-icon"><FileSpreadsheet size={21}/></div><h3>Aucun jeu de données pour le moment</h3><p>{canUpload ? 'Importez un fichier CSV pour commencer à explorer vos données.' : 'Un membre avec les droits de modification peut importer le premier fichier.'}</p>{canUpload && <Button size="sm" className="primary-button" onClick={onUpload}><Upload size={15}/> Choisir un fichier CSV</Button>}<small>CSV · UTF-8 · jusqu’à 10 Mo et 20 000 lignes</small></div>;
 }
 function LoadingPanel() { return <div className="loading-panel"><LoaderCircle size={19} className="spin"/> Chargement des données…</div>; }
-function ComingSoon() {
-  const title = 'Membres et paramètres';
-  const text = 'La gestion des membres, invitations et rôles est à construire.';
-  return <section className="coming-panel"><div className="coming-mark"><Sparkles size={22}/></div><div className="eyebrow"><span className="eyebrow-line"/>PROCHAINE ÉTAPE</div><h1>{title}</h1><p>{text}</p><span className="coming-note">Cette section ne présente pas de données fictives.</span></section>;
-}
-
-
 function ProfilePanel({ profile, loading }: { profile: DatasetProfile | null; loading: boolean }) {
   if (loading || !profile) return <section className="profile-section"><div className="preview-heading"><div><h2>Profil des colonnes</h2><p>Calculé sur les valeurs réellement importées.</p></div></div><div className="loading-panel"><LoaderCircle size={18} className="spin"/> Calcul du profil…</div></section>;
   const numeric = profile.columns.filter((column) => column.data_type === 'number');
