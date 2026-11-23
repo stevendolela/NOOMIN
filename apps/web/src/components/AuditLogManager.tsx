@@ -10,6 +10,7 @@ const actionLabels: Record<string, string> = {
   'analysis.saved': 'Analyse enregistrée', 'pipeline.created': 'Pipeline créé', 'pipeline.run_requested': 'Exécution lancée',
   'member.role_changed': 'Rôle modifié', 'member.removed': 'Membre retiré', 'invitation.created': 'Invitation créée',
   'invitation.revoked': 'Invitation révoquée', 'invitation.accepted': 'Invitation acceptée',
+  'api_key.created': 'Clé API créée', 'api_key.revoked': 'Clé API révoquée',
 };
 
 function details(event: AuditEvent) {
@@ -20,6 +21,7 @@ function details(event: AuditEvent) {
   if (typeof values.row_count === 'number') parts.push(`${values.row_count.toLocaleString('fr-FR')} lignes`);
   if (typeof values.column_count === 'number') parts.push(`${values.column_count} colonnes`);
   if (typeof values.step_count === 'number') parts.push(`${values.step_count} étapes`);
+  if (typeof values.name === 'string') parts.push(values.name);
   return parts.join(' · ');
 }
 

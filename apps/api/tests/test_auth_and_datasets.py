@@ -57,6 +57,70 @@ def test_role_permission_matrix_matches_product_roles() -> None:
     assert not has_permission(MembershipRole.MEMBER, Permission.VIEW_AUDIT_LOG)
 
 
+def test_api_key_is_single_display_tenant_scoped_and_revocable(client) -> None:
+    owner = create_account(client)
+    org_id = owner["organizations"][0]["id"]
+    org_headers = {"X-Organization-ID": org_id}
+    created = client.post("/api/v1/api-keys", headers=org_headers, json={"name": "Reporting", "scopes": ["datasets:read"], "expires_in_days": 90})
+    assert created.status_code == 201, created.text
+    key = created.json()
+    secret = key["secret"]
+    assert secret.startswith("noomin_live_")
+    assert secret not in str(client.get("/api/v1/api-keys", headers=org_headers).json())
+    from noomin_api.models import OrganizationAPIKey
+    with client.app.state.test_session_factory() as db:
+        stored_key = db.get(OrganizationAPIKey, UUID(key["id"]))
+        assert stored_key is not None
+        assert stored_key.key_hash != secret
+
+    uploaded = client.post("/api/v1/datasets", headers=org_headers, files={"file": ("sales.csv", "month,revenue\njan,12\nfeb,18", "text/csv")})
+    assert uploaded.status_code == 201, uploaded.text
+    dataset_id = uploaded.json()["id"]
+    key_headers = {"Authorization": f"Bearer {secret}"}
+    listed = client.get("/api/v1/client/v1/datasets", headers=key_headers)
+    assert listed.status_code == 200
+    assert [dataset["id"] for dataset in listed.json()] == [dataset_id]
+    rows = client.get(f"/api/v1/client/v1/datasets/{dataset_id}/rows?limit=1", headers=key_headers)
+    assert rows.status_code == 200
+    assert rows.json()["total"] == 2
+    assert len(rows.json()["items"]) == 1
+    profile = client.get(f"/api/v1/client/v1/datasets/{dataset_id}/profile", headers=key_headers)
+    assert profile.status_code == 403
+    profile_key = client.post("/api/v1/api-keys", headers=org_headers, json={"name": "Profil", "scopes": ["profiles:read"]})
+    assert profile_key.status_code == 201, profile_key.text
+    scoped_profile = client.get(f"/api/v1/client/v1/datasets/{dataset_id}/profile", headers={"Authorization": f"Bearer {profile_key.json()['secret']}"})
+    assert scoped_profile.status_code == 200
+    assert client.get("/api/v1/client/v1/datasets", headers={"Authorization": "Bearer noomin_live_invalid"}).status_code == 401
+
+    other_client = TestClient(client.app)
+    other = create_account(other_client, "other@example.com")
+    other_headers = {"X-Organization-ID": other["organizations"][0]["id"]}
+    other_dataset = other_client.post("/api/v1/datasets", headers=other_headers, files={"file": ("other.csv", "value\nprivate", "text/csv")})
+    assert other_dataset.status_code == 201
+    leaked = client.get(f"/api/v1/client/v1/datasets/{other_dataset.json()['id']}", headers=key_headers)
+    assert leaked.status_code == 404
+
+    revoked = client.delete(f"/api/v1/api-keys/{key['id']}", headers=org_headers)
+    assert revoked.status_code == 204
+    denied = client.get("/api/v1/client/v1/datasets", headers=key_headers)
+    assert denied.status_code == 401
+
+
+def test_only_owner_can_create_or_list_api_keys(client) -> None:
+    owner = create_account(client)
+    org_id = owner["organizations"][0]["id"]
+    with client.app.state.test_session_factory() as db:
+        from sqlalchemy import select
+        from noomin_api.models import Membership
+        membership = db.scalar(select(Membership).where(Membership.organization_id == UUID(org_id)))
+        membership.role = MembershipRole.ADMIN
+        db.commit()
+    response = client.get("/api/v1/api-keys", headers={"X-Organization-ID": org_id})
+    assert response.status_code == 403
+    response = client.post("/api/v1/api-keys", headers={"X-Organization-ID": org_id}, json={"name": "Blocked", "scopes": ["datasets:read"]})
+    assert response.status_code == 403
+
+
 def test_owner_can_manage_members_but_cannot_remove_last_owner(client: TestClient) -> None:
     session = create_account(client)
     organization_id = session["organizations"][0]["id"]

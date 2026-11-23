@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 import hmac
 
 from noomin_api.api.analyses import router as analyses_router
+from noomin_api.api.api_keys import customer_router as customer_api_router, management_router as api_key_router
 from noomin_api.api.audit import router as audit_router
 from noomin_api.api.auth import router as auth_router
 from noomin_api.api.datasets import router as datasets_router
@@ -42,6 +43,8 @@ app.include_router(analyses_router, prefix=settings.api_v1_prefix)
 app.include_router(members_router, prefix=settings.api_v1_prefix)
 app.include_router(invitations_router, prefix=settings.api_v1_prefix)
 app.include_router(audit_router, prefix=settings.api_v1_prefix)
+app.include_router(api_key_router, prefix=settings.api_v1_prefix)
+app.include_router(customer_api_router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/", include_in_schema=False)

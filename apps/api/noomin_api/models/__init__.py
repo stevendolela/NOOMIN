@@ -1,8 +1,8 @@
 from noomin_api.models.dataset import Dataset, DatasetRow
-from noomin_api.models.identity import AuthLoginThrottle, Membership, MembershipRole, Organization, OrganizationInvitation, User
+from noomin_api.models.identity import AuthLoginThrottle, Membership, MembershipRole, Organization, OrganizationAPIKey, OrganizationInvitation, User
 from noomin_api.models.audit import AuditLog
 
-__all__ = ["Dataset", "DatasetRow", "Membership", "MembershipRole", "Organization", "OrganizationInvitation", "AuthLoginThrottle", "AuditLog", "User"]
+__all__ = ["Dataset", "DatasetRow", "Membership", "MembershipRole", "Organization", "OrganizationAPIKey", "OrganizationInvitation", "AuthLoginThrottle", "AuditLog", "User"]
 from noomin_api.models.pipeline import Pipeline, PipelineRun
 
 __all__ += ["Pipeline", "PipelineRun"]

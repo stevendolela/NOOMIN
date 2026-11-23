@@ -10,6 +10,7 @@ NOOMIN est le nom de travail du produit. La disponibilité de la marque et du do
 - Invitations par lien secret à usage unique, valables 7 jours, avec acceptation et création du compte invité ; le lien doit être partagé manuellement, aucun e-mail n’est envoyé.
 - Connexions protégées par une limite persistée : 10 échecs par compte/adresse IP ou 60 échecs par adresse IP sur 15 minutes ; les identifiants de limitation sont stockés sous forme HMAC.
 - Mutations navigateur protégées par validation de l’origine et jeton CSRF signé lié à la session ; journal d’audit tenant-scoped des imports/suppressions, analyses, pipelines, membres et invitations, consultable par propriétaire/administrateur.
+- API client en lecture seule via des clés API rattachées à une organisation, avec scopes, expiration, révocation, journal des créations/révocations et accès paginé aux lignes CSV. La clé complète n’est affichée qu’une fois lors de sa création ; seul son hash est conservé.
 - Import d’un CSV UTF-8 (10 Mo maximum, 20 000 lignes et 200 colonnes maximum), stockage des valeurs dans PostgreSQL et aperçu paginé des 100 premières lignes.
 - Suppression d’un jeu de données depuis la liste, réservée aux rôles pouvant modifier ; les analyses et pipelines qui dépendent de la source sont également supprimés après confirmation.
 - Profil descriptif calculé sur les valeurs importées : type de colonne, valeurs présentes/distinctes et distribution des colonnes numériques ; les distributions peuvent être enregistrées comme analyses dans l’organisation.
@@ -19,6 +20,17 @@ NOOMIN est le nom de travail du produit. La disponibilité de la marque et du do
 Planification récurrente, connecteurs externes, tableaux de bord composables, envoi d’invitations par e-mail, IA, facturation et vérification d’e-mail ne sont pas encore implémentés. Aucun service de données ou modèle IA externe n’est présenté comme connecté.
 
 Le MFA, le SSO client (Microsoft Entra ID / Active Directory fédéré) et le provisioning d’annuaire sont également à venir ; le périmètre prévu est suivi dans [la feuille de route identité](docs/phase1/IDENTITY_ROADMAP.md).
+
+### API client
+
+Un propriétaire crée une clé dans **Accès API**. Elle donne uniquement les droits de lecture choisis et est liée à l’organisation active lors de sa création. L’API ne prend pas d’identifiant d’organisation fourni par le client : elle déduit le tenant de la clé.
+
+- `GET /api/v1/client/v1/datasets`
+- `GET /api/v1/client/v1/datasets/{dataset_id}`
+- `GET /api/v1/client/v1/datasets/{dataset_id}/rows?limit=100&offset=0`
+- `GET /api/v1/client/v1/datasets/{dataset_id}/profile` (scope `profiles:read`)
+
+Présentez le secret comme `Authorization: Bearer <clé>`. Les clés expirent par défaut après 90 jours (réglable entre 1 et 365 jours) et un propriétaire peut les révoquer dans l’interface. La première version est en lecture seule et plafonne une page à 1 000 lignes. Ne mettez jamais une clé dans le code frontend livré au navigateur. Une limitation de débit spécifique aux clés API et une migration PostgreSQL appliquée sur un serveur réel restent à faire avant une exposition de production.
 
 ## Démarrage complet
 
@@ -101,4 +113,4 @@ alembic upgrade head
 uvicorn noomin_api.main:app --reload
 ```
 
-Dans un second terminal, à la racine du dépôt : `npm install && npm run dev`. Les inscriptions, imports et résultats de pipeline de ce mode sont conservés dans `work/noomin-preview.sqlite` sur cette machine. Les tâches Celery s’exécutent localement en mode eager, sans Redis ; Compose utilise Redis et le worker pour les traitements asynchrones. Le mode SQLite crée automatiquement les tables additives des invitations, limiteurs de connexion et journaux d’audit si elles manquent, sans modifier les tables ni données existantes.
+Dans un second terminal, à la racine du dépôt : `npm install && npm run dev`. Les inscriptions, imports et résultats de pipeline de ce mode sont conservés dans `work/noomin-preview.sqlite` sur cette machine. Les tâches Celery s’exécutent localement en mode eager, sans Redis ; Compose utilise Redis et le worker pour les traitements asynchrones. Le mode SQLite crée automatiquement les tables additives des invitations, limiteurs de connexion, journaux d’audit et clés API si elles manquent, sans modifier les tables ni données existantes.

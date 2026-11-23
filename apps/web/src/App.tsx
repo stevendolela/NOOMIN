@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Activity, ArrowLeft, ArrowUpRight, Bell, Check, ChevronDown, CircleHelp, ClipboardList, Database, FileSpreadsheet, LayoutDashboard, LoaderCircle, LogOut, Plus, Settings2, Sparkles, Table2, Trash2, Upload, Workflow } from 'lucide-react';
+import { Activity, ArrowLeft, ArrowUpRight, Bell, Check, ChevronDown, CircleHelp, ClipboardList, Database, FileSpreadsheet, KeyRound, LayoutDashboard, LoaderCircle, LogOut, Plus, Settings2, Sparkles, Table2, Trash2, Upload, Workflow } from 'lucide-react';
 import AuthScreen from './components/AuthScreen';
 import PipelineManager from './components/PipelineManager';
 import AnalyticsManager from './components/AnalyticsManager';
 import MemberManager from './components/MemberManager';
 import InviteAccept from './components/InviteAccept';
 import AuditLogManager from './components/AuditLogManager';
+import ApiKeyManager from './components/ApiKeyManager';
 import { Button } from './components/ui/button';
 import { api } from './lib/api';
 import type { ColumnProfile, Dataset, DatasetDetail, DatasetProfile, Session } from './lib/types';
 
-type View = 'overview' | 'datasets' | 'pipelines' | 'analytics' | 'settings' | 'audit' | 'detail';
+type View = 'overview' | 'datasets' | 'pipelines' | 'analytics' | 'settings' | 'audit' | 'api_keys' | 'detail';
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} o`;
@@ -129,7 +130,7 @@ export default function App() {
   if (invitationToken) return <InviteAccept token={invitationToken} session={session} onAccepted={finishInvitation} onLogin={updateInvitationSession} onCancel={cancelInvitation}/>;
   if (!session) return <AuthScreen onAuthenticated={authenticated}/>;
 
-  const viewTitle = view === 'overview' ? 'Vue d’ensemble' : view === 'datasets' ? 'Jeux de données' : view === 'detail' ? (datasetDetail?.name ?? 'Jeu de données') : view === 'pipelines' ? 'Pipelines' : view === 'analytics' ? 'Analyses' : view === 'settings' ? 'Accès et membres' : view === 'audit' ? 'Journal d’audit' : 'Paramètres';
+  const viewTitle = view === 'overview' ? 'Vue d’ensemble' : view === 'datasets' ? 'Jeux de données' : view === 'detail' ? (datasetDetail?.name ?? 'Jeu de données') : view === 'pipelines' ? 'Pipelines' : view === 'analytics' ? 'Analyses' : view === 'settings' ? 'Accès et membres' : view === 'audit' ? 'Journal d’audit' : view === 'api_keys' ? 'Accès API' : 'Paramètres';
   const canUpload = organization?.role !== 'viewer';
   const canManageMembers = organization?.role === 'owner' || organization?.role === 'admin';
 
@@ -147,6 +148,7 @@ export default function App() {
       </nav>
       <div className="side-label connections-label">ORGANISATION</div>
       <button aria-label="Accès et membres" className={`org-nav-row ${view === 'settings' ? 'selected' : ''}`} onClick={() => setView('settings')}><Settings2 size={17}/><span>Accès et membres</span></button>
+      {organization?.role === 'owner' && <button aria-label="Accès API" className={`org-nav-row ${view === 'api_keys' ? 'selected' : ''}`} onClick={() => setView('api_keys')}><KeyRound size={17}/><span>Accès API</span></button>}
       {canManageMembers && <button aria-label="Journal d’audit" className={`org-nav-row ${view === 'audit' ? 'selected' : ''}`} onClick={() => setView('audit')}><ClipboardList size={17}/><span>Journal d’audit</span></button>}
       <div className="sidebar-bottom"><div className="help-card"><div className="help-icon"><CircleHelp size={17}/></div><b>Un espace qui grandit avec vous</b><p>Importez un premier fichier CSV pour explorer vos données.</p><button onClick={() => canUpload && fileInput.current?.click()}>Importer un CSV <ArrowUpRight size={14}/></button></div><button className="profile" onClick={() => void logout()} title="Se déconnecter"><span className="profile-avatar">{session.user.full_name.slice(0, 1).toUpperCase()}</span><span className="profile-copy"><b>{session.user.full_name}</b><small>{session.user.email}</small></span><LogOut size={15}/></button></div>
     </aside>
@@ -167,6 +169,7 @@ export default function App() {
         {view === 'analytics' && organizationId && <AnalyticsManager organizationId={organizationId} datasets={datasets} canEdit={canUpload} onNotice={(text, kind) => setNotice({ text, kind })}/>}
         {view === 'settings' && organizationId && <MemberManager organizationId={organizationId} currentUserId={session.user.id} canManage={Boolean(canManageMembers)} role={organization?.role ?? ''} onNotice={(text, kind) => setNotice({ text, kind })}/>}
         {view === 'audit' && organizationId && <AuditLogManager organizationId={organizationId} onNotice={(text, kind) => setNotice({ text, kind })}/>}
+        {view === 'api_keys' && organizationId && organization?.role === 'owner' && <ApiKeyManager organizationId={organizationId} onNotice={(text, kind) => setNotice({ text, kind })}/>}
         <footer className="app-footer"><span>© 2026 NOOMIN</span><span className="footer-status">{datasets.length ? `${datasets.length.toLocaleString('fr-FR')} jeu${datasets.length > 1 ? 'x' : ''} de données importé${datasets.length > 1 ? 's' : ''}` : 'Aucune source connectée'} <span className="footer-divider">·</span> Environnement de démarrage</span><button onClick={() => setNotice({ text: 'Le centre d’aide sera ajouté prochainement.', kind: 'success' })}><CircleHelp size={14}/> Centre d’aide</button></footer>
       </div>
     </main>

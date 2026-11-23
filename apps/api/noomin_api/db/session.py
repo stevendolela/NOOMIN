@@ -9,13 +9,14 @@ engine = create_engine(database_url, pool_pre_ping=True, connect_args=connect_ar
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 # The local SQLite preview does not run the PostgreSQL Alembic chain. Create
-# only this new additive table there so existing preview data remains intact.
+# only additive feature tables there so existing preview data remains intact.
 if database_url.startswith("sqlite"):
-    from noomin_api.models import AuditLog, AuthLoginThrottle, OrganizationInvitation
+    from noomin_api.models import AuditLog, AuthLoginThrottle, OrganizationAPIKey, OrganizationInvitation
 
     OrganizationInvitation.__table__.create(engine, checkfirst=True)
     AuthLoginThrottle.__table__.create(engine, checkfirst=True)
     AuditLog.__table__.create(engine, checkfirst=True)
+    OrganizationAPIKey.__table__.create(engine, checkfirst=True)
 
 
 def get_db():
