@@ -2,13 +2,13 @@ import csv
 import io
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from noomin_api.api.dependencies import get_current_organization, get_current_user
 from noomin_api.db.session import get_db
-from noomin_api.models import Dataset, DatasetRow, Membership, Organization, User
+from noomin_api.models import Dataset, DatasetRow, Membership, Organization, Pipeline, PipelineRun, SavedAnalysis, User
 from noomin_api.schemas.dataset import DatasetDetail, DatasetSummary
 from noomin_api.schemas.profile import DatasetProfile
 from noomin_api.services.profiling import profile_columns
@@ -124,6 +124,32 @@ def get_dataset(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Jeu de données introuvable.")
     rows = db.scalars(select(DatasetRow).where(DatasetRow.dataset_id == dataset.id).order_by(DatasetRow.row_number).limit(PREVIEW_LIMIT)).all()
     return DatasetDetail(**_summary(dataset).model_dump(), preview=[row.values for row in rows])
+
+
+@router.delete("/{dataset_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_dataset(
+    dataset_id: UUID,
+    organization: Organization = Depends(get_current_organization),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    membership = db.scalar(select(Membership).where(Membership.user_id == user.id, Membership.organization_id == organization.id))
+    if membership is None or membership.role.value == "viewer":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Votre rôle ne permet pas de supprimer des jeux de données.")
+    dataset = db.scalar(select(Dataset).where(Dataset.id == dataset_id, Dataset.organization_id == organization.id))
+    if dataset is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Jeu de données introuvable.")
+
+    source_pipelines = db.scalars(select(Pipeline).where(Pipeline.source_dataset_id == dataset.id)).all()
+    for pipeline in source_pipelines:
+        db.delete(pipeline)
+    for run in db.scalars(select(PipelineRun).where(PipelineRun.output_dataset_id == dataset.id)).all():
+        run.output_dataset_id = None
+    for analysis in db.scalars(select(SavedAnalysis).where(SavedAnalysis.dataset_id == dataset.id)).all():
+        db.delete(analysis)
+    db.delete(dataset)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{dataset_id}/profile", response_model=DatasetProfile)

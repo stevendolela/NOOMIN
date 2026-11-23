@@ -1,4 +1,5 @@
 import pytest
+from uuid import UUID
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -118,6 +119,33 @@ def test_csv_import_detects_semicolon_delimiter_and_quoted_values(client: TestCl
         headers={"X-Organization-ID": session["organizations"][0]["id"]},
     )
     assert detail.json()["preview"] == [{"NOM": "Durand, Léa", "CIRCONSCRIPTION": "Paris;Centre", "NOTES": "12"}]
+
+
+def test_dataset_owner_can_delete_import_and_viewer_cannot(client: TestClient) -> None:
+    owner_session = create_account(client)
+    organization_id = owner_session["organizations"][0]["id"]
+    uploaded = client.post(
+        "/api/v1/datasets",
+        headers={"X-Organization-ID": organization_id},
+        files={"file": ("sales.csv", "amount\n12\n", "text/csv")},
+    )
+    dataset_id = uploaded.json()["id"]
+
+    other_client = TestClient(app)
+    viewer_session = create_account(other_client, "viewer@example.com")
+    viewer_id = viewer_session["user"]["id"]
+    with client.app.state.test_session_factory() as db:
+        from noomin_api.models import Membership, MembershipRole
+
+        db.add(Membership(organization_id=UUID(organization_id), user_id=UUID(viewer_id), role=MembershipRole.VIEWER))
+        db.commit()
+    denied = other_client.delete(f"/api/v1/datasets/{dataset_id}", headers={"X-Organization-ID": organization_id})
+    assert denied.status_code == 403
+
+    deleted = client.delete(f"/api/v1/datasets/{dataset_id}", headers={"X-Organization-ID": organization_id})
+    assert deleted.status_code == 204
+    assert client.get(f"/api/v1/datasets/{dataset_id}", headers={"X-Organization-ID": organization_id}).status_code == 404
+    assert client.get("/api/v1/datasets", headers={"X-Organization-ID": organization_id}).json() == []
 
 
 def test_dataset_is_not_visible_to_another_organization(client: TestClient) -> None:
