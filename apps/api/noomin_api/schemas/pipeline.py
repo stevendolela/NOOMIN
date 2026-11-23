@@ -49,3 +49,8 @@ class PipelineResponse(BaseModel):
     steps: list[dict]
     created_at: datetime
     last_run: PipelineRunResponse | None = None
+
+
+class PipelineRunHistoryResponse(BaseModel):
+    items: list[PipelineRunResponse]
+    total: int

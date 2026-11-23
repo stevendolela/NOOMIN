@@ -236,11 +236,19 @@ def test_celery_pipeline_filters_and_creates_a_new_dataset(client: TestClient, m
     execute_pipeline_job(queued.json()["id"], session_factory=client.app.state.test_session_factory)
     completed = client.get(f"/api/v1/pipelines/{pipeline_id}", headers={"X-Organization-ID": organization_id}).json()["last_run"]
     assert completed["status"] == "succeeded"
+    history = client.get(f"/api/v1/pipelines/{pipeline_id}/runs", headers={"X-Organization-ID": organization_id})
+    assert history.status_code == 200, history.text
+    assert history.json()["total"] == 1
+    assert history.json()["items"][0]["id"] == queued.json()["id"]
     output = client.get(f"/api/v1/datasets/{completed['output_dataset_id']}", headers={"X-Organization-ID": organization_id})
     assert output.status_code == 200
     assert output.json()["row_count"] == 2
     assert output.json()["columns"] == ["date", "revenue_selected"]
     assert output.json()["preview"][0] == {"date": "2026-01-02", "revenue_selected": "25"}
+    other_client = TestClient(client.app)
+    other = create_account(other_client, "outsider@example.com")
+    forbidden_history = other_client.get(f"/api/v1/pipelines/{pipeline_id}/runs", headers={"X-Organization-ID": other["organizations"][0]["id"]})
+    assert forbidden_history.status_code == 404
 
 
 def test_numeric_analysis_is_saved_and_scoped_to_organization(client: TestClient) -> None:

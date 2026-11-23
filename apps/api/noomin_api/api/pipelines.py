@@ -1,15 +1,15 @@
 from uuid import UUID
 from decimal import Decimal, InvalidOperation
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from noomin_api.api.dependencies import get_current_organization, get_current_user
 from noomin_api.api.permissions import Permission, require_permission
 from noomin_api.db.session import get_db
 from noomin_api.models import Dataset, Membership, Organization, Pipeline, PipelineRun, User
-from noomin_api.schemas.pipeline import FilterRowsStep, PipelineCreate, PipelineResponse, PipelineRunResponse, RenameColumnsStep, SelectColumnsStep
+from noomin_api.schemas.pipeline import FilterRowsStep, PipelineCreate, PipelineResponse, PipelineRunHistoryResponse, PipelineRunResponse, RenameColumnsStep, SelectColumnsStep
 from noomin_api.tasks import execute_pipeline
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
@@ -125,6 +125,23 @@ def get_pipeline(
     if pipeline is None:
         raise HTTPException(status_code=404, detail="Pipeline introuvable.")
     return _pipeline_response(db, pipeline)
+
+
+@router.get("/{pipeline_id}/runs", response_model=PipelineRunHistoryResponse)
+def list_pipeline_runs(
+    pipeline_id: UUID,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    organization: Organization = Depends(get_current_organization),
+    db: Session = Depends(get_db),
+) -> PipelineRunHistoryResponse:
+    pipeline = db.scalar(select(Pipeline).where(Pipeline.id == pipeline_id, Pipeline.organization_id == organization.id))
+    if pipeline is None:
+        raise HTTPException(status_code=404, detail="Pipeline introuvable.")
+    base = select(PipelineRun).where(PipelineRun.pipeline_id == pipeline.id)
+    total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
+    runs = db.scalars(base.order_by(PipelineRun.created_at.desc(), PipelineRun.id.desc()).offset(offset).limit(limit)).all()
+    return PipelineRunHistoryResponse(items=[_run_response(run) for run in runs], total=total)
 
 
 @router.post("/{pipeline_id}/runs", response_model=PipelineRunResponse, status_code=status.HTTP_202_ACCEPTED)
