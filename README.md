@@ -86,4 +86,4 @@ alembic upgrade head
 uvicorn noomin_api.main:app --reload
 ```
 
-Dans un second terminal, à la racine du dépôt : `npm install && npm run dev`. Les inscriptions, imports et résultats de pipeline de ce mode sont conservés dans `work/noomin-preview.sqlite` sur cette machine. Les tâches Celery s’exécutent localement en mode eager, sans Redis ; Compose utilise Redis et le worker pour les traitements asynchrones.
+Dans un second terminal, à la racine du dépôt : `npm install && npm run dev`. Les inscriptions, imports et résultats de pipeline de ce mode sont conservés dans `work/noomin-preview.sqlite` sur cette machine. Les tâches Celery s’exécutent localement en mode eager, sans Redis ; Compose utilise Redis et le worker pour les traitements asynchrones. Le mode SQLite crée automatiquement la table additive des invitations si elle manque, sans modifier les tables ni données existantes.

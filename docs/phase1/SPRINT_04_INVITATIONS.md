@@ -6,6 +6,7 @@
 ## Livré
 
 - Migration Alembic `0006_organization_invitations` et modèle de stockage des invitations.
+- Le mode aperçu SQLite crée la nouvelle table additive au démarrage, sans exécuter la chaîne PostgreSQL ni modifier les données existantes.
 - Création d’invitations réservée aux propriétaires/administrateurs, avec contrôle du rôle attribuable.
 - Jeton aléatoire à usage unique ; seule son empreinte SHA-256 est stockée en base.
 - Expiration après 7 jours, consultation sans cache, acceptation unique et révocation par les gestionnaires autorisés.
