@@ -7,6 +7,11 @@ class HistogramBin(BaseModel):
     count: int
 
 
+class CategoryFrequency(BaseModel):
+    value: str
+    count: int
+
+
 class ColumnProfile(BaseModel):
     name: str
     data_type: str
@@ -16,6 +21,7 @@ class ColumnProfile(BaseModel):
     maximum: float | None = None
     average: float | None = None
     distribution: list[HistogramBin] = Field(default_factory=list)
+    category_counts: list[CategoryFrequency] = Field(default_factory=list)
 
 
 class DatasetProfile(BaseModel):

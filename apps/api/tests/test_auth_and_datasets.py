@@ -92,6 +92,9 @@ def test_csv_import_persists_rows_and_scopes_them_to_organization(client: TestCl
     assert amount["data_type"] == "number"
     assert amount["minimum"] == 12.5 and amount["maximum"] == 15.0
     assert sum(item["count"] for item in amount["distribution"]) == 2
+    date = next(column for column in profile.json()["columns"] if column["name"] == "jour")
+    assert date["data_type"] == "text"
+    assert date["category_counts"] == [{"value": "2026-01-01", "count": 1}, {"value": "2026-01-02", "count": 1}]
 
 
 def test_csv_import_rejects_duplicate_columns(client: TestClient) -> None:

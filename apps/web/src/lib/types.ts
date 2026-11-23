@@ -15,7 +15,8 @@ export type Dataset = {
 export type DatasetDetail = Dataset & { preview: Array<Record<string, string | null>> };
 
 export type HistogramBin = { start: number; end: number; count: number };
-export type ColumnProfile = { name: string; data_type: 'number' | 'text'; non_null_count: number; unique_count: number; minimum: number | null; maximum: number | null; average: number | null; distribution: HistogramBin[] };
+export type CategoryFrequency = { value: string; count: number };
+export type ColumnProfile = { name: string; data_type: 'number' | 'text'; non_null_count: number; unique_count: number; minimum: number | null; maximum: number | null; average: number | null; distribution: HistogramBin[]; category_counts: CategoryFrequency[] };
 export type DatasetProfile = { dataset_id: string; row_count: number; columns: ColumnProfile[] };
 export type PipelineRun = { id: string; status: 'queued' | 'running' | 'succeeded' | 'failed'; output_dataset_id: string | null; error_message: string | null; created_at: string; started_at: string | null; finished_at: string | null };
 export type Pipeline = { id: string; name: string; source_dataset_id: string; source_dataset_name: string; steps: Array<Record<string, unknown>>; created_at: string; last_run: PipelineRun | null };

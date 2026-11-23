@@ -1,4 +1,5 @@
 import math
+from collections import Counter
 from decimal import Decimal, InvalidOperation
 
 from noomin_api.schemas.profile import ColumnProfile, HistogramBin
@@ -43,5 +44,11 @@ def profile_columns(columns: list[str], rows: list[dict[str, str | None]]) -> li
                         index = min(int((value - minimum) / width), bin_count - 1)
                         counts[index] += 1
                     bins = [HistogramBin(start=minimum + index * width, end=maximum if index == bin_count - 1 else minimum + (index + 1) * width, count=count) for index, count in enumerate(counts)]
-        profiles.append(ColumnProfile(name=column, data_type=data_type, non_null_count=len(values), unique_count=unique_count, minimum=minimum, maximum=maximum, average=average, distribution=bins))
+        category_counts = []
+        if data_type == "text":
+            category_counts = [
+                {"value": value, "count": count}
+                for value, count in Counter(values).most_common(10)
+            ]
+        profiles.append(ColumnProfile(name=column, data_type=data_type, non_null_count=len(values), unique_count=unique_count, minimum=minimum, maximum=maximum, average=average, distribution=bins, category_counts=category_counts))
     return profiles
