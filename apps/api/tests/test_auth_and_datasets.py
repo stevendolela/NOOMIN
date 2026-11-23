@@ -81,6 +81,63 @@ def test_owner_can_manage_members_but_cannot_remove_last_owner(client: TestClien
     assert hidden.status_code == 403
 
 
+def test_invitation_is_single_use_expires_and_creates_member(client: TestClient) -> None:
+    owner = create_account(client)
+    org_id = owner["organizations"][0]["id"]
+    headers = {"X-Organization-ID": org_id}
+    created = client.post("/api/v1/members/invitations", headers=headers, json={"email": "new.person@example.com", "role": "member"})
+    assert created.status_code == 201, created.text
+    data = created.json()
+    assert "token" in data
+    assert data["email"] == "new.person@example.com"
+    invite_token = data["token"]
+    detail = client.get(f"/api/v1/invitations/{invite_token}")
+    assert detail.status_code == 200
+    assert detail.json()["organization_name"] == owner["organizations"][0]["name"]
+    pending = client.get("/api/v1/members/invitations", headers=headers)
+    assert pending.status_code == 200
+    assert pending.json()[0]["email"] == "new.person@example.com"
+    invitee_client = TestClient(client.app)
+    accepted = invitee_client.post(f"/api/v1/invitations/{invite_token}/accept", json={"full_name": "New Person", "password": "valid-password-2026!"})
+    assert accepted.status_code == 200, accepted.text
+    invited_org = next(item for item in accepted.json()["organizations"] if item["id"] == org_id)
+    assert invited_org["role"] == "member"
+    used = invitee_client.post(f"/api/v1/invitations/{invite_token}/accept", json={"full_name": "New Person", "password": "valid-password-2026!"})
+    assert used.status_code == 404
+    assert client.get(f"/api/v1/invitations/{invite_token}").status_code == 404
+
+
+def test_admin_cannot_invite_admin_or_owner(client: TestClient) -> None:
+    owner = create_account(client)
+    org_id = owner["organizations"][0]["id"]
+    with client.app.state.test_session_factory() as db:
+        from sqlalchemy import select
+        from noomin_api.models import Membership, MembershipRole
+        membership = db.scalar(select(Membership).where(Membership.organization_id == UUID(org_id), Membership.user_id == UUID(owner["user"]["id"])))
+        membership.role = MembershipRole.ADMIN
+        db.commit()
+    denied = client.post("/api/v1/members/invitations", headers={"X-Organization-ID": org_id}, json={"email": "admin@example.com", "role": "admin"})
+    assert denied.status_code == 403
+
+
+def test_expired_invitation_is_not_revealed_or_accepted(client: TestClient) -> None:
+    from datetime import UTC, datetime, timedelta
+    from sqlalchemy import select
+    from noomin_api.models import OrganizationInvitation
+
+    owner = create_account(client)
+    org_id = owner["organizations"][0]["id"]
+    created = client.post("/api/v1/members/invitations", headers={"X-Organization-ID": org_id}, json={"email": "expired@example.com"})
+    token = created.json()["token"]
+    with client.app.state.test_session_factory() as db:
+        invitation = db.scalar(select(OrganizationInvitation).where(OrganizationInvitation.email == "expired@example.com"))
+        invitation.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+    assert client.get(f"/api/v1/invitations/{token}").status_code == 404
+    expired = client.post(f"/api/v1/invitations/{token}/accept", json={"full_name": "Expired User", "password": "valid-password-2026!"})
+    assert expired.status_code == 404
+
+
 def test_registration_creates_owner_session_and_rejects_duplicate(client: TestClient) -> None:
     session = create_account(client)
     assert session["user"]["email"] == "camille@example.com"

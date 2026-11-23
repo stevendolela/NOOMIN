@@ -7,13 +7,14 @@ NOOMIN est le nom de travail du produit. La disponibilité de la marque et du do
 - Création de compte avec une organisation et un rôle propriétaire ; connexion et déconnexion par cookie de session HTTP-only.
 - Accès aux données limité aux organisations auxquelles le compte appartient. Les rôles `owner`, `admin`, `member` (Analyste dans l’interface) et `viewer` disposent de permissions distinctes centralisées.
 - Sélecteur d’organisation pour les comptes multi-organisation ; propriétaires et administrateurs peuvent lister les membres, modifier les rôles autorisés et retirer les adhésions. L’organisation conserve toujours au moins un propriétaire.
+- Invitations par lien secret à usage unique, valables 7 jours, avec acceptation et création du compte invité ; le lien doit être partagé manuellement, aucun e-mail n’est envoyé.
 - Import d’un CSV UTF-8 (10 Mo maximum, 20 000 lignes et 200 colonnes maximum), stockage des valeurs dans PostgreSQL et aperçu paginé des 100 premières lignes.
 - Suppression d’un jeu de données depuis la liste, réservée aux rôles pouvant modifier ; les analyses et pipelines qui dépendent de la source sont également supprimés après confirmation.
 - Profil descriptif calculé sur les valeurs importées : type de colonne, valeurs présentes/distinctes et distribution des colonnes numériques ; les distributions peuvent être enregistrées comme analyses dans l’organisation.
 - Pipelines réels de sélection/renommage de colonnes et filtrage, exécutés en arrière-plan par Celery ; leurs résultats sont enregistrés comme nouveaux jeux de données.
 - Interface React/TypeScript responsive, Vite, Tailwind et composants selon les conventions shadcn/ui.
 
-Planification récurrente, connecteurs externes, tableaux de bord composables, invitations par e-mail, IA, facturation et vérification d’e-mail ne sont pas encore implémentés. Aucun service de données ou modèle IA externe n’est présenté comme connecté.
+Planification récurrente, connecteurs externes, tableaux de bord composables, envoi d’invitations par e-mail, IA, facturation et vérification d’e-mail ne sont pas encore implémentés. Aucun service de données ou modèle IA externe n’est présenté comme connecté.
 
 ## Démarrage complet
 
@@ -67,7 +68,7 @@ cd ../.. && npm run build && npm run lint
 
 Les mots de passe sont hachés avec Argon2id et le cookie est HTTP-only, `SameSite=Lax`, avec l’attribut `Secure` hors développement. La déconnexion révoque côté serveur les jetons de session de l’utilisateur. Les permissions sont contrôlées côté API selon le rôle. Hors environnements locaux/de test, l’API refuse certains secrets JWT de développement connus et les origines CORS wildcard (`*`). Ce contrôle ne remplace pas la génération et la gestion d’un secret robuste. Le health check vérifie PostgreSQL et répond `503` si la base est indisponible. Remplacez tous les identifiants de développement avant tout déploiement.
 
-Ce MVP n’inclut pas encore la vérification d’adresse e-mail, la limitation de tentatives de connexion, la gestion des invitations, les sauvegardes, les journaux d’audit ni une revue de sécurité de production. Le health check ne vérifie pas Redis ni le worker Celery.
+Ce MVP n’inclut pas encore la vérification d’adresse e-mail, la limitation de tentatives de connexion, les sauvegardes, les journaux d’audit ni une revue de sécurité de production. Le health check ne vérifie pas Redis ni le worker Celery.
 
 ### Aperçu local sans Docker
 

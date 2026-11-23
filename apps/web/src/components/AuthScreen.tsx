@@ -4,8 +4,8 @@ import { Button } from './ui/button';
 import { api } from '../lib/api';
 import type { Session } from '../lib/types';
 
-export default function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Session) => void }) {
-  const [mode, setMode] = useState<'login' | 'register'>('register');
+export default function AuthScreen({ onAuthenticated, initialMode = 'register' }: { onAuthenticated: (session: Session) => void; initialMode?: 'login' | 'register' }) {
+  const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);

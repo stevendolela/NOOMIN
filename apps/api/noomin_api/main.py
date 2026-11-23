@@ -5,7 +5,7 @@ from noomin_api.api.analyses import router as analyses_router
 from noomin_api.api.auth import router as auth_router
 from noomin_api.api.datasets import router as datasets_router
 from noomin_api.api.health import router as health_router
-from noomin_api.api.members import router as members_router
+from noomin_api.api.members import invitations_router, router as members_router
 from noomin_api.api.pipelines import router as pipelines_router
 from noomin_api.core.config import get_settings
 
@@ -18,6 +18,7 @@ app.include_router(datasets_router, prefix=settings.api_v1_prefix)
 app.include_router(pipelines_router, prefix=settings.api_v1_prefix)
 app.include_router(analyses_router, prefix=settings.api_v1_prefix)
 app.include_router(members_router, prefix=settings.api_v1_prefix)
+app.include_router(invitations_router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/", include_in_schema=False)

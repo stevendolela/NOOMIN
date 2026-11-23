@@ -4,6 +4,7 @@ import AuthScreen from './components/AuthScreen';
 import PipelineManager from './components/PipelineManager';
 import AnalyticsManager from './components/AnalyticsManager';
 import MemberManager from './components/MemberManager';
+import InviteAccept from './components/InviteAccept';
 import { Button } from './components/ui/button';
 import { api } from './lib/api';
 import type { ColumnProfile, Dataset, DatasetDetail, DatasetProfile, Session } from './lib/types';
@@ -30,6 +31,7 @@ export default function App() {
   const [uploading, setUploading] = useState(false);
   const [notice, setNotice] = useState<{ text: string; kind: 'success' | 'error' } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const invitationToken = new URLSearchParams(window.location.search).get('invite') ?? new URLSearchParams(window.location.hash.replace(/^#/, '')).get('invite');
 
   useEffect(() => {
     let alive = true;
@@ -67,9 +69,22 @@ export default function App() {
   const totalColumns = datasets.reduce((sum, dataset) => sum + dataset.column_count, 0);
 
   function authenticated(next: Session) {
+    window.history.replaceState({}, '', window.location.pathname);
     setSession(next);
     setOrganizationId(next.organizations[0]?.id ?? '');
     setView('overview');
+  }
+
+  function updateInvitationSession(next: Session) {
+    setSession(next);
+    setOrganizationId(next.organizations[0]?.id ?? '');
+  }
+
+  function finishInvitation(next: Session) { authenticated(next); }
+  function cancelInvitation() {
+    window.history.replaceState({}, '', window.location.pathname);
+    if (!session) setSession(null);
+    else setView('overview');
   }
 
   async function logout() {
@@ -110,6 +125,7 @@ export default function App() {
   }
 
   if (booting) return <div className="boot-screen"><LoaderCircle className="spin" size={25}/><span>Ouverture de votre espace…</span></div>;
+  if (invitationToken) return <InviteAccept token={invitationToken} session={session} onAccepted={finishInvitation} onLogin={updateInvitationSession} onCancel={cancelInvitation}/>;
   if (!session) return <AuthScreen onAuthenticated={authenticated}/>;
 
   const viewTitle = view === 'overview' ? 'Vue d’ensemble' : view === 'datasets' ? 'Jeux de données' : view === 'detail' ? (datasetDetail?.name ?? 'Jeu de données') : view === 'pipelines' ? 'Pipelines' : view === 'analytics' ? 'Analyses' : view === 'settings' ? 'Accès et membres' : 'Paramètres';
