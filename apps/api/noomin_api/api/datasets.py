@@ -39,7 +39,12 @@ def _read_csv(payload: bytes) -> tuple[list[str], list[dict[str, str | None]]]:
         text = payload.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
         raise HTTPException(status_code=400, detail="Le CSV doit être encodé en UTF-8.") from exc
-    reader = csv.DictReader(io.StringIO(text, newline=""))
+    sample = text[:64 * 1024]
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+    except csv.Error:
+        dialect = csv.excel
+    reader = csv.DictReader(io.StringIO(text, newline=""), dialect=dialect)
     headers = reader.fieldnames
     if not headers or not any((header or "").strip() for header in headers):
         raise HTTPException(status_code=400, detail="Le fichier ne contient pas de ligne d’en-tête valide.")

@@ -104,6 +104,22 @@ def test_csv_import_rejects_duplicate_columns(client: TestClient) -> None:
     assert "uniques" in response.json()["detail"]
 
 
+def test_csv_import_detects_semicolon_delimiter_and_quoted_values(client: TestClient) -> None:
+    session = create_account(client)
+    response = client.post(
+        "/api/v1/datasets",
+        headers={"X-Organization-ID": session["organizations"][0]["id"]},
+        files={"file": ("candidats.csv", 'NOM;CIRCONSCRIPTION;NOTES\n"Durand, Léa";"Paris;Centre";12\n', "text/csv")},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["columns"] == ["NOM", "CIRCONSCRIPTION", "NOTES"]
+    detail = client.get(
+        f"/api/v1/datasets/{response.json()['id']}",
+        headers={"X-Organization-ID": session["organizations"][0]["id"]},
+    )
+    assert detail.json()["preview"] == [{"NOM": "Durand, Léa", "CIRCONSCRIPTION": "Paris;Centre", "NOTES": "12"}]
+
+
 def test_dataset_is_not_visible_to_another_organization(client: TestClient) -> None:
     first = create_account(client)
     first_org = first["organizations"][0]["id"]
