@@ -138,6 +138,29 @@ def test_expired_invitation_is_not_revealed_or_accepted(client: TestClient) -> N
     assert expired.status_code == 404
 
 
+def test_login_throttle_blocks_repeated_failures_and_resets_after_window(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from datetime import UTC, datetime, timedelta
+    from sqlalchemy import select
+    from noomin_api.api import auth
+    from noomin_api.models import AuthLoginThrottle
+
+    create_account(client, "throttle@example.com")
+    monkeypatch.setattr(auth, "LOGIN_FAILURE_LIMIT", 2)
+    first = client.post("/api/v1/auth/login", json={"email": "throttle@example.com", "password": "wrong-password"})
+    second = client.post("/api/v1/auth/login", json={"email": "throttle@example.com", "password": "wrong-password"})
+    assert first.status_code == 401
+    assert second.status_code == 429
+    blocked = client.post("/api/v1/auth/login", json={"email": "throttle@example.com", "password": "correct-horse-2026!"})
+    assert blocked.status_code == 429
+    with client.app.state.test_session_factory() as db:
+        throttle = db.get(AuthLoginThrottle, auth._login_bucket("throttle@example.com", "testclient"))
+        throttle.blocked_until = datetime.now(UTC) - timedelta(seconds=1)
+        throttle.window_started_at = datetime.now(UTC) - timedelta(minutes=16)
+        db.commit()
+    success = client.post("/api/v1/auth/login", json={"email": "throttle@example.com", "password": "correct-horse-2026!"})
+    assert success.status_code == 200
+
+
 def test_registration_creates_owner_session_and_rejects_duplicate(client: TestClient) -> None:
     session = create_account(client)
     assert session["user"]["email"] == "camille@example.com"
