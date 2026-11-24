@@ -4,8 +4,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-noomin}
       POSTGRES_USER: ${POSTGRES_USER:-noomin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-noomin_dev_only}
-    ports: ["5432:5432"]
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes: ["postgres_data:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-noomin} -d ${POSTGRES_DB:-noomin}"]
@@ -14,9 +13,11 @@ services:
       retries: 10
   redis:
     image: redis:7-alpine
-    ports: ["6379:6379"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    command: ["sh", "-c", "exec redis-server --requirepass \"$${REDIS_PASSWORD}\""]
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$${REDIS_PASSWORD}\" redis-cli ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -26,18 +27,15 @@ services:
       dockerfile: Dockerfile.api
     env_file: [.env]
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://noomin:noomin_dev_only@db:5432/noomin}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-development-only-change-me-use-at-least-32-characters}
-      ENVIRONMENT: ${ENVIRONMENT:-development}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
-    ports: ["8000:8000"]
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      REDIS_URL: ${REDIS_URL:?Set REDIS_URL in .env}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+      ENVIRONMENT: ${ENVIRONMENT:?Set ENVIRONMENT in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS in .env}
     depends_on:
       db: {condition: service_healthy}
       redis: {condition: service_healthy}
-    command: sh -c "alembic -c alembic.ini upgrade head && uvicorn noomin_api.main:app --host 0.0.0.0 --port 8000 --reload"
-    volumes:
-      - ./apps/api:/app
+    command: ["uvicorn", "noomin_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready', timeout=3)"]
       interval: 10s
@@ -50,28 +48,42 @@ services:
       dockerfile: Dockerfile.api
     env_file: [.env]
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://noomin:noomin_dev_only@db:5432/noomin}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-development-only-change-me-use-at-least-32-characters}
-      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      REDIS_URL: ${REDIS_URL:?Set REDIS_URL in .env}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+      ENVIRONMENT: ${ENVIRONMENT:?Set ENVIRONMENT in .env}
     depends_on:
       db: {condition: service_healthy}
       redis: {condition: service_healthy}
     command: celery -A noomin_api.worker:celery_app worker --loglevel=info
-    volumes:
-      - ./apps/api:/app
     healthcheck:
       test: ["CMD-SHELL", "celery -A noomin_api.worker:celery_app inspect ping --timeout=5 | grep -q pong"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 20s
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    env_file: [.env]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+    profiles: [maintenance]
+    depends_on:
+      db: {condition: service_healthy}
+    command: ["alembic", "-c", "alembic.ini", "upgrade", "head"]
   web:
     build:
       context: .
       dockerfile: Dockerfile.web
-    ports: ["5173:80"]
     depends_on:
       api: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 volumes:
   postgres_data:

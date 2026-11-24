@@ -4,5 +4,7 @@ WORKDIR /app
 COPY apps/api/pyproject.toml ./pyproject.toml
 COPY apps/api/ ./
 RUN pip install --no-cache-dir .
+RUN addgroup --system noomin && adduser --system --ingroup noomin noomin && chown -R noomin:noomin /app
+USER noomin
 EXPOSE 8000
 CMD ["uvicorn", "noomin_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

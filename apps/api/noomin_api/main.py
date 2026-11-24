@@ -29,10 +29,10 @@ async def csrf_guard(request, call_next):
     if origin and origin not in settings.allowed_origins:
         return JSONResponse(status_code=403, content={"detail": "Origine non autorisée."})
     session_token = request.cookies.get("session")
-    if origin and session_token:
+    if session_token:
         cookie_token = request.cookies.get("csrf_token", "")
         header_token = request.headers.get("x-csrf-token", "")
-        if (cookie_token or header_token) and (not cookie_token or not header_token or not hmac.compare_digest(cookie_token, header_token) or not hmac.compare_digest(cookie_token, create_csrf_token(session_token))):
+        if not cookie_token or not header_token or not hmac.compare_digest(cookie_token, header_token) or not hmac.compare_digest(cookie_token, create_csrf_token(session_token)):
             return JSONResponse(status_code=403, content={"detail": "Jeton CSRF invalide ou manquant."})
     return await call_next(request)
 app.include_router(health_router, prefix=settings.api_v1_prefix)

@@ -38,8 +38,8 @@ Prérequis : Docker Engine avec Docker Compose v2.
 
 ```bash
 cp .env.example .env
-# Définissez un JWT_SECRET_KEY aléatoire d'au moins 32 caractères et changez POSTGRES_PASSWORD.
-docker compose up --build
+# Remplacez les mots de passe PostgreSQL/Redis (mot de passe Redis URL-safe) et JWT_SECRET_KEY.
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
 - Interface : <http://localhost:5173>
@@ -48,8 +48,16 @@ docker compose up --build
 - Liveness API : <http://localhost:8000/api/v1/health>
 - Readiness (PostgreSQL + Redis) : <http://localhost:8000/api/v1/ready>
 
-Compose attend que PostgreSQL et Redis soient prêts. L’API applique les migrations Alembic avant de démarrer. Nginx sert l’interface et relaie `/api/` vers FastAPI.
-Compose expose l’état des services : l’API n’est prête qu’après connexion à PostgreSQL et Redis, et le worker est vérifié par un ping Celery. L’interface attend que l’API soit saine avant de démarrer.
+Compose attend que PostgreSQL et Redis soient prêts. La surcharge de développement applique les migrations Alembic au démarrage de l’API. Nginx sert l’interface et relaie `/api/` vers FastAPI. Redis exige un mot de passe ; les ports hôte et les volumes de code source n’existent que dans la surcharge de développement et sont liés à `127.0.0.1`.
+La configuration de base ne publie aucun port hôte, ne monte pas le code source et ne lance pas Uvicorn en mode rechargement automatique. La surcharge `docker-compose.dev.yml` ajoute ces commodités pour le développement local. Pour un environnement partagé, configurez `ENVIRONMENT=production`, des secrets propres à l’environnement et `CORS_ORIGINS` avec le domaine exact, puis appliquez les migrations explicitement :
+
+```bash
+docker compose --profile maintenance run --rm migrate
+docker compose up -d --build
+```
+
+La configuration ne fournit pas de reverse proxy TLS public : l’ingress de déploiement doit router vers le service `web` et terminer TLS. Gardez PostgreSQL et Redis sur le réseau interne Compose.
+Compose expose l’état des services : l’API n’est prête qu’après connexion à PostgreSQL et Redis, le worker est vérifié par un ping Celery, et Nginx répond à son healthcheck.
 
 Après le démarrage, vérifiez les services et la révision de base :
 
@@ -62,7 +70,7 @@ Les services `db`, `redis`, `api`, `worker` et `web` doivent être `healthy`. L�
 
 ## Développement local
 
-L’API attend PostgreSQL et Redis accessibles. Démarrer les services de données avec `docker compose up db redis`, puis dans un autre terminal :
+L’API attend PostgreSQL et Redis accessibles. Démarrer les services de données avec `docker compose -f docker-compose.yml -f docker-compose.dev.yml up db redis`, puis dans un autre terminal :
 
 ```bash
 cd apps/api
@@ -70,7 +78,8 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
 set -a && source ../../.env && set +a
-export DATABASE_URL=postgresql+psycopg://noomin:noomin_dev_only@localhost:5432/noomin
+export DATABASE_URL=postgresql+psycopg://noomin:VOTRE_MOT_DE_PASSE_POSTGRES@localhost:5432/noomin
+export REDIS_URL=redis://:VOTRE_MOT_DE_PASSE_REDIS@localhost:6379/0
 alembic upgrade head
 uvicorn noomin_api.main:app --reload
 ```
@@ -93,7 +102,7 @@ cd ../.. && npm run build && npm run lint
 
 ## Sécurité et limites de déploiement
 
-Les mots de passe sont hachés avec Argon2id. Le cookie de session est HTTP-only et `SameSite=Lax`; un cookie CSRF séparé est lié cryptographiquement à la session. Les cookies portent l’attribut `Secure` hors développement. La déconnexion révoque côté serveur les jetons de session de l’utilisateur. Les permissions sont contrôlées côté API selon le rôle. Hors environnements locaux/de test, l’API refuse certains secrets JWT de développement connus et les origines CORS wildcard (`*`). Ce contrôle ne remplace pas la génération et la gestion d’un secret robuste. Le health check vérifie PostgreSQL et répond `503` si la base est indisponible. Remplacez tous les identifiants de développement avant tout déploiement.
+Les mots de passe sont hachés avec Argon2id. Le cookie de session est HTTP-only et `SameSite=Lax`; toute mutation authentifiée par cookie exige un cookie et un en-tête CSRF signés liés à la session. Les cookies portent l’attribut `Secure` hors développement. La déconnexion révoque côté serveur les jetons de session de l’utilisateur. Les permissions sont contrôlées côté API selon le rôle. Hors environnements locaux/de test, l’API refuse certains secrets JWT de développement connus et les origines CORS wildcard (`*`). Ce contrôle ne remplace pas la génération et la gestion d’un secret robuste. Le health check vérifie PostgreSQL et répond `503` si la base est indisponible. Remplacez tous les identifiants de développement avant tout déploiement.
 
 Ce MVP n’inclut pas encore la vérification d’adresse e-mail, des sauvegardes ni une revue de sécurité de production. Les journaux d’audit n’ont pas encore de politique de rétention. La limitation actuelle concerne les connexions et ne remplace pas une protection globale contre les abus. Le health check ne vérifie pas Redis ni le worker Celery.
 

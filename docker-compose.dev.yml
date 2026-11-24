@@ -1,0 +1,15 @@
+services:
+  db:
+    ports: ["127.0.0.1:5432:5432"]
+  redis:
+    ports: ["127.0.0.1:6379:6379"]
+  api:
+    ports: ["127.0.0.1:8000:8000"]
+    command: sh -c "alembic -c alembic.ini upgrade head && uvicorn noomin_api.main:app --host 0.0.0.0 --port 8000 --reload"
+    volumes:
+      - ./apps/api:/app
+  worker:
+    volumes:
+      - ./apps/api:/app
+  web:
+    ports: ["127.0.0.1:5173:80"]

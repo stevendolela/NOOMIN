@@ -41,7 +41,16 @@ def client(monkeypatch):
             return None
 
     monkeypatch.setattr(dependencies.Redis, "from_url", lambda *args, **kwargs: TestRedis())
-    with TestClient(app) as test_client:
+    class CSRFTestClient(TestClient):
+        def request(self, method, url, **kwargs):
+            include_csrf = kwargs.pop("_include_csrf", True)
+            headers = dict(kwargs.pop("headers", {}) or {})
+            csrf_token = self.cookies.get("csrf_token")
+            if include_csrf and method.upper() in {"POST", "PUT", "PATCH", "DELETE"} and csrf_token and not any(key.lower() == "x-csrf-token" for key in headers):
+                headers["X-CSRF-Token"] = csrf_token
+            return super().request(method, url, headers=headers, **kwargs)
+
+    with CSRFTestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
     Base.metadata.drop_all(engine)
@@ -106,7 +115,7 @@ def test_api_key_is_single_display_tenant_scoped_and_revocable(client) -> None:
     assert scoped_profile.status_code == 200
     assert client.get("/api/v1/client/v1/datasets", headers={"Authorization": "Bearer noomin_live_invalid"}).status_code == 401
 
-    other_client = TestClient(client.app)
+    other_client = client.__class__(client.app)
     other = create_account(other_client, "other@example.com")
     other_headers = {"X-Organization-ID": other["organizations"][0]["id"]}
     other_dataset = other_client.post("/api/v1/datasets", headers=other_headers, files={"file": ("other.csv", "value\nprivate", "text/csv")})
@@ -218,7 +227,7 @@ def test_invitation_is_single_use_expires_and_creates_member(client: TestClient)
     pending = client.get("/api/v1/members/invitations", headers=headers)
     assert pending.status_code == 200
     assert pending.json()[0]["email"] == "new.person@example.com"
-    invitee_client = TestClient(client.app)
+    invitee_client = client.__class__(client.app)
     accepted = invitee_client.post(f"/api/v1/invitations/{invite_token}/accept", json={"full_name": "New Person", "password": "valid-password-2026!"})
     assert accepted.status_code == 200, accepted.text
     invited_org = next(item for item in accepted.json()["organizations"] if item["id"] == org_id)
@@ -288,8 +297,10 @@ def test_csrf_guard_rejects_cross_origin_and_requires_signed_token(client: TestC
     assert csrf
     bad_origin = client.post("/api/v1/auth/logout", headers={"Origin": "https://untrusted.example"})
     assert bad_origin.status_code == 403
-    missing_token = client.post("/api/v1/auth/logout", headers={"Origin": "http://localhost:5173"})
+    missing_token = client.request("POST", "/api/v1/auth/logout", headers={"Origin": "http://localhost:5173"}, _include_csrf=False)
     assert missing_token.status_code == 403
+    missing_origin_and_token = client.request("POST", "/api/v1/auth/logout", _include_csrf=False)
+    assert missing_origin_and_token.status_code == 403
     accepted = client.post("/api/v1/auth/logout", headers={"Origin": "http://localhost:5173", "X-CSRF-Token": csrf})
     assert accepted.status_code == 204
 
