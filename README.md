@@ -30,7 +30,7 @@ Un propriétaire crée une clé dans **Accès API**. Elle donne uniquement les d
 - `GET /api/v1/client/v1/datasets/{dataset_id}/rows?limit=100&offset=0`
 - `GET /api/v1/client/v1/datasets/{dataset_id}/profile` (scope `profiles:read`)
 
-Présentez le secret comme `Authorization: Bearer <clé>`. Les clés expirent par défaut après 90 jours (réglable entre 1 et 365 jours) et un propriétaire peut les révoquer dans l’interface. La première version est en lecture seule et plafonne une page à 1 000 lignes. Ne mettez jamais une clé dans le code frontend livré au navigateur. Une limitation de débit spécifique aux clés API et une migration PostgreSQL appliquée sur un serveur réel restent à faire avant une exposition de production.
+Présentez le secret comme `Authorization: Bearer <clé>`. Les clés expirent par défaut après 90 jours (réglable entre 1 et 365 jours) et un propriétaire peut les révoquer dans l’interface. La première version est en lecture seule et plafonne une page à 1 000 lignes. Le quota est de 120 requêtes par minute et par clé, partagé par Redis en environnement avec PostgreSQL ; l’aperçu SQLite utilise un compteur local au processus. Ne mettez jamais une clé dans le code frontend livré au navigateur. Avant une exposition de production, appliquer et vérifier la migration PostgreSQL sur l’environnement déployé.
 
 ## Démarrage complet
 

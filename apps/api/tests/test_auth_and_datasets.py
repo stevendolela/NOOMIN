@@ -13,7 +13,9 @@ from noomin_api.models import MembershipRole
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    from noomin_api.api import dependencies
+
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     TestingSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     Base.metadata.create_all(engine)
@@ -27,6 +29,18 @@ def client():
 
     app.dependency_overrides[get_db] = override_get_db
     app.state.test_session_factory = TestingSession
+
+    class TestRedis:
+        counts: dict[str, int] = {}
+
+        def eval(self, _script, _key_count, key, _window):
+            self.counts[key] = self.counts.get(key, 0) + 1
+            return [self.counts[key], 60]
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(dependencies.Redis, "from_url", lambda *args, **kwargs: TestRedis())
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -119,6 +133,47 @@ def test_only_owner_can_create_or_list_api_keys(client) -> None:
     assert response.status_code == 403
     response = client.post("/api/v1/api-keys", headers={"X-Organization-ID": org_id}, json={"name": "Blocked", "scopes": ["datasets:read"]})
     assert response.status_code == 403
+
+
+def test_customer_api_key_rate_limit_returns_retry_after(client, monkeypatch) -> None:
+    from noomin_api.api import dependencies
+
+    monkeypatch.setattr(dependencies, "API_KEY_RATE_LIMIT", 2)
+    owner = create_account(client)
+    org_id = owner["organizations"][0]["id"]
+    created = client.post("/api/v1/api-keys", headers={"X-Organization-ID": org_id}, json={"name": "Rate limit", "scopes": ["datasets:read"]})
+    assert created.status_code == 201
+    headers = {"Authorization": f"Bearer {created.json()['secret']}"}
+    first = client.get("/api/v1/client/v1/datasets", headers=headers)
+    second = client.get("/api/v1/client/v1/datasets", headers=headers)
+    limited = client.get("/api/v1/client/v1/datasets", headers=headers)
+    assert first.status_code == 200
+    assert second.headers["X-RateLimit-Remaining"] == "0"
+    assert limited.status_code == 429
+    assert limited.headers["Retry-After"]
+
+
+def test_production_customer_api_fails_closed_when_redis_is_unavailable(client, monkeypatch) -> None:
+    from types import SimpleNamespace
+    from redis.exceptions import ConnectionError as RedisConnectionError
+    from noomin_api.api import dependencies
+
+    owner = create_account(client)
+    org_id = owner["organizations"][0]["id"]
+    created = client.post("/api/v1/api-keys", headers={"X-Organization-ID": org_id}, json={"name": "Redis outage", "scopes": ["datasets:read"]})
+    assert created.status_code == 201
+
+    class BrokenRedis:
+        def eval(self, *args):
+            raise RedisConnectionError("unavailable")
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(dependencies, "get_settings", lambda: SimpleNamespace(environment="production", database_url="postgresql://db", redis_url="redis://unavailable"))
+    monkeypatch.setattr(dependencies.Redis, "from_url", lambda *args, **kwargs: BrokenRedis())
+    response = client.get("/api/v1/client/v1/datasets", headers={"Authorization": f"Bearer {created.json()['secret']}"})
+    assert response.status_code == 503
 
 
 def test_owner_can_manage_members_but_cannot_remove_last_owner(client: TestClient) -> None:
