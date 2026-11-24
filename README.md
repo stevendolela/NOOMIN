@@ -68,6 +68,10 @@ docker compose exec api alembic -c alembic.ini current
 
 Les services `db`, `redis`, `api`, `worker` et `web` doivent être `healthy`. L’interface de contrôle comprend ensuite l’inscription, l’import d’un CSV, le profil de données et la création puis l’exécution d’un pipeline. Cette vérification manuelle avec des conteneurs réels reste nécessaire sur une machine avec Docker ; elle n’est pas exécutée par les tests locaux.
 
+### Utiliser une base Supabase
+
+Dans le tableau de bord Supabase, ouvrez **Connect** pour copier la chaîne de connexion. Pour un serveur NOOMIN persistant sur un réseau IPv4, choisissez **Session pooler** ; choisissez **Direct connection** si l’hôte de l’API dispose d’IPv6. Placez la chaîne dans `DATABASE_URL` côté API, jamais dans le frontend. Les URL Supabase standards (`postgresql://` ou `postgres://`) sont converties automatiquement vers le pilote psycopg 3 utilisé par NOOMIN. Conservez `sslmode=require` dans l’URL. Utilisez la connexion directe pour les migrations lorsque le réseau du processus de maintenance la prend en charge ; sinon, le mode Session pooler est prévu pour les connexions persistantes IPv4.
+
 ## Développement local
 
 L’API attend PostgreSQL et Redis accessibles. Démarrer les services de données avec `docker compose -f docker-compose.yml -f docker-compose.dev.yml up db redis`, puis dans un autre terminal :

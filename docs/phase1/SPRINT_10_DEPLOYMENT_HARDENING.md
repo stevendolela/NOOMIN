@@ -12,10 +12,11 @@ Réduire les risques de configuration avant d’ajouter des intégrations métie
 - Les ports locaux, le montage du code source, le rechargement automatique et les migrations au démarrage sont isolés dans `docker-compose.dev.yml`.
 - Un service de maintenance dédié applique les migrations Alembic. L’image API s’exécute sous un utilisateur non-root.
 - Ajout d’un healthcheck pour l’interface Nginx et mise à jour des instructions d’installation et de déploiement.
+- Les URL PostgreSQL standard de Supabase (`postgresql://` et `postgres://`) sont converties automatiquement vers le pilote psycopg 3, pour l’API comme pour Alembic.
 
 ## Vérifications effectuées
 
-- `pytest` sur la suite API : **28 tests réussis**.
+- `pytest` sur la suite API : **31 tests réussis**.
 - Vérification syntaxique des deux fichiers Compose en YAML : réussie.
 - `git diff --check` : aucune erreur d’espacement.
 

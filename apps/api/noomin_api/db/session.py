@@ -2,8 +2,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from noomin_api.core.config import get_settings
+from noomin_api.db.url import normalize_database_url
 
-database_url = get_settings().database_url
+configured_database_url = get_settings().database_url
+database_url = normalize_database_url(configured_database_url)
 connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
 engine = create_engine(database_url, pool_pre_ping=True, connect_args=connect_args)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)

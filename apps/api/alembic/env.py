@@ -5,10 +5,11 @@ from sqlalchemy import engine_from_config, pool
 
 from noomin_api.core.config import get_settings
 from noomin_api.db.base import Base
+from noomin_api.db.url import normalize_database_url
 from noomin_api import models  # noqa: F401 — registers model metadata
 
 config = context.config
-config.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
+config.set_main_option("sqlalchemy.url", normalize_database_url(get_settings().database_url).replace("%", "%%"))
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 target_metadata = Base.metadata
